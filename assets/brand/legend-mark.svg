@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Legend's mark: the aura as a thin egg, and three points of light inside it, the head, the
+       heart (a touch to the left, as in the figure) and the gut. Transparent background. -->
+  <defs>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="1" />
+      <stop offset="0.18" stop-color="#ffffff" stop-opacity="0.9" />
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.22" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <ellipse cx="512" cy="530" rx="268" ry="372" fill="none" stroke="#8a8a8a" stroke-width="14" />
+  <circle cx="512" cy="330" r="118" fill="url(#glow)" />
+  <circle cx="474" cy="530" r="96" fill="url(#glow)" />
+  <circle cx="512" cy="716" r="108" fill="url(#glow)" />
+</svg>

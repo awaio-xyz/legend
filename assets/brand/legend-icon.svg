@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- The app icon: Legend's mark on a black rounded square. Source for `npx tauri icon`. -->
+  <defs>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="1" />
+      <stop offset="0.18" stop-color="#ffffff" stop-opacity="0.9" />
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.22" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="#000000" />
+  <ellipse cx="512" cy="522" rx="250" ry="346" fill="none" stroke="#8a8a8a" stroke-width="16" />
+  <circle cx="512" cy="336" r="112" fill="url(#glow)" />
+  <circle cx="476" cy="522" r="92" fill="url(#glow)" />
+  <circle cx="512" cy="696" r="102" fill="url(#glow)" />
+</svg>

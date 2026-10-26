@@ -1,0 +1,23 @@
+[package]
+name = "legend"
+version = "0.1.81"
+description = "Project Legend"
+authors = ["Legend contributors"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+# The `_lib` suffix avoids a bin/lib name clash on Windows (cargo#8519).
+name = "legend_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-window-state = "2"
+tauri-plugin-dialog = "2"
+base64 = "0.22"
