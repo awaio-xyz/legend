@@ -338,6 +338,15 @@ const MOVES: Move[] = [
     weight: W(1, 1.4, 0.8, 1.2),
   },
   { name: "squared", region: 2, pose: () => ({ shoulderL: 0.1, shoulderR: 0.1, bodyPitch: -0.03, pitch: -0.05, ...both({ abd: 0.1, elbow: 0.12 }) }), hold: [6, 12], turn: [2, 3], weight: W(0.8, 1.5, 0.6, 1.2) },
+  {
+    name: "rooted breath",
+    region: 2,
+    // Feet a little apart, knees soft, palms turned open at the sides: slow breaths rise and fall.
+    pose: () => ({ ...leg(1, { abd: 0.08, knee: 0.2 }), ...leg(-1, { abd: 0.08, knee: 0.2 }), ...both({ abd: 0.15, elbow: 0.2, inward: -0.05 }), pitch: 0.16, shoulderL: 0.1, shoulderR: 0.1, fidget: { keys: ["shoulderL", "shoulderR"], amp: 0.08, freq: 0.35 } }),
+    hold: [8, 16],
+    turn: [2.5, 3.5],
+    weight: W(1.4, 0.6, 1.4, 0.6),
+  },
   // The spirit: lifted, reaching, beyond.
   {
     name: "halo",
