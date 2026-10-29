@@ -99,8 +99,9 @@ project a prompt came from is a separate toggle, off by default. Everything stay
   Fibonacci counts, drifts into the space around the figure and loosens it, until after years of
   use the person becomes light.
 - **Behaviour follows the data.** Which moves the figure makes (and whether it stands, walks or
-  levitates) is weighted by your recent mix of head, heart, gut and spirit, and it turns toward new
-  fragments as they land.
+  levitates) is weighted by your recent mix of head, heart, gut and spirit. It turns toward new
+  fragments as they land, and often answers them in place: a reach toward ones out in the aura, a
+  hand to where they touched the body.
 - **The genome** (20 genes and rare traits) is seeded from your first words and locked at birth. It
   sets temperament, not data.
 

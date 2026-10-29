@@ -1,6 +1,6 @@
 [package]
 name = "legend"
-version = "0.1.81"
+version = "0.1.82"
 description = "Project Legend"
 authors = ["Legend contributors"]
 license = "MIT"

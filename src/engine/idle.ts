@@ -6,7 +6,8 @@
 // The idle preset is your style: the tempo, how long holds last. Which moves play is the data's:
 // each move belongs to a region, and the person's mood (mostly their recent fragments, with their
 // whole Legend underneath) weights the draw. Live fragments also get a reaction: the head turns
-// toward where they landed, then a short move in their region answers. Each hour gets a fresh order, drawn from the
+// toward where they landed, then a short move in their region answers, or a hand goes to the
+// landing itself (reached for in the aura, touched on the body). Each hour gets a fresh order, drawn from the
 // genome's seed, so the body never visibly loops. The idle preset is the temperament: which moves
 // it favours and how long it lingers.
 import { rngFor } from "./rng";
@@ -59,11 +60,43 @@ interface Fidget {
 }
 interface Move {
   name: string;
-  pose: (r: () => number) => Partial<Pose> & { fidget?: Fidget };
+  pose: (r: () => number, land?: Landing) => Partial<Pose> & { fidget?: Fidget };
   hold: [number, number]; // seconds
   turn: [number, number]; // transition seconds
   weight: Weights;
   region?: number; // 0 head, 1 heart, 2 gut, 3 spirit (see REGION_OF for the older moves)
+}
+
+/** Where a burst of new fragments landed, in the body's rest frame: for reactions that answer it in place. */
+export interface Landing {
+  at: [number, number, number];
+  normal: [number, number, number]; // outward from the body where it landed
+  onBody: boolean; // on the body itself, not out in the aura
+  arm: number; // 0, or the arm it landed on: +1 the person's left, -1 the right
+  shoulderX: number; // where the arms hinge, for this body
+  elbowX: number;
+}
+
+// The arm's bones, from the shader: the shoulder hinge, the elbow, and the middle of the palm.
+const HINGE_Y = 0.29, HINGE_Z = -0.01, ELBOW_Y = 0.02, PALM_Y = -0.3, PALM_Z = 0.055, PALM_OUT = 0.017;
+const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+
+/**
+ * Two-bone IK for one arm (+1 the person's left, -1 the right): the flexion, elbow bend and turn in
+ * that bring the palm to a rest-frame point, solved in the order the shader applies them. Abduction
+ * stays 0, so the arm swings in a vertical plane and the elbow hangs naturally. Out of reach, it points.
+ */
+export function reachTo(s: number, p: [number, number, number], land: Landing): Partial<Pose> {
+  const out = s * p[0] - land.shoulderX, dy = p[1] - HINGE_Y, dz = p[2] - HINGE_Z;
+  const ox = land.elbowX + PALM_OUT - land.shoulderX; // the hanging palm sits a little out from the hinge
+  const l1 = HINGE_Y - ELBOW_Y, l2 = Math.hypot(ELBOW_Y - PALM_Y, PALM_Z), rake = Math.atan2(PALM_Z, ELBOW_Y - PALM_Y);
+  // The turn in carries the palm round the hinge, so first find how far forward it must reach.
+  const hz = Math.sqrt(Math.max(0, out * out + dz * dz - ox * ox));
+  const inward = Math.atan2(ox, hz) - Math.atan2(out, dz);
+  const d = clamp(Math.hypot(hz, dy), 0.14, (l1 + l2) * 0.97);
+  const bend = Math.acos(clamp((d * d - l1 * l1 - l2 * l2) / (2 * l1 * l2), -1, 1));
+  const flex = Math.atan2(hz, -dy) - Math.atan2(l2 * Math.sin(bend), l1 + l2 * Math.cos(bend));
+  return arm(s, { flex: clamp(flex, -0.4, 2.95), elbow: clamp(bend - rake, 0.05, 2.6), inward: clamp(inward, -1.2, 1.1) });
 }
 /** Weights by temperament: calm, watchful, contemplative, restless. */
 const W = (calm: number, watchful: number, contemplative: number, restless: number): Weights => ({ calm, watchful, contemplative, restless });
@@ -494,6 +527,32 @@ const REACTIONS: Move[][] = [
     { name: "one hand up", pose: (r) => ({ ...arm(side(r), { flex: 2.4, abd: 0.25, elbow: 0.3 }), pitch: -0.35 }), hold: [2.5, 4], turn: [1.4, 1.8], weight: W(1, 1, 1, 1) },
   ],
 ];
+// Aimed reactions: answers to where the fragments landed, not just which region they speak for. A
+// landing out in the aura is reached for; one on the body is touched. `then` is a second beat: the
+// hand follows through. The head keeps looking at the landing unless the move says otherwise.
+interface AimedMove extends Move {
+  aim: "aura" | "body";
+  then?: (r: () => number, land: Landing) => Partial<Pose>;
+}
+/** The hand on the landing's side, or the other hand when it landed on an arm. */
+const handFor = (_r: () => number, land: Landing) => (land.arm ? -land.arm : land.at[0] >= 0 ? 1 : -1);
+/** Just off the skin where it landed, so the palm rests on the body instead of sinking in. */
+const onSkin = (land: Landing): [number, number, number] => [0, 1, 2].map((k) => land.at[k] + land.normal[k] * 0.05) as [number, number, number];
+const AIMED: AimedMove[] = [
+  { name: "reaches for it", aim: "aura", pose: (r, land) => (land ? { ...reachTo(handFor(r, land), land.at, land), shoulderL: 0.1, shoulderR: 0.1 } : {}), hold: [2, 3.5], turn: [1.3, 1.7], weight: W(1, 1, 1, 1) },
+  {
+    name: "draws it in",
+    aim: "aura",
+    pose: (r, land) => (land ? reachTo(handFor(r, land), land.at, land) : {}),
+    then: (r, land) => ({ ...arm(handFor(r, land), { flex: 0.75, elbow: 1.95, inward: 0.6 }), pitch: 0.2, yaw: 0 }),
+    hold: [1, 1.8],
+    turn: [1.3, 1.7],
+    weight: W(1, 1, 1, 1),
+  },
+  { name: "touches where it landed", aim: "body", pose: (r, land) => (land ? reachTo(handFor(r, land), onSkin(land), land) : {}), hold: [2.5, 4.5], turn: [1.3, 1.8], weight: W(1, 1, 1, 1) },
+];
+/** Whether an aimed move can answer this landing: nothing reaches behind the body. */
+const aimable = (m: AimedMove, land: Landing) => m.aim === (land.onBody ? "body" : "aura") && (land.onBody ? land.normal[2] > -0.3 : land.at[2] > -0.15);
 export type ChoreoMode = "ground" | "walk" | "air";
 
 /** A move from the library held still, by name: for imagery. Levitation moves come with the air's rest. */
@@ -570,27 +629,38 @@ export class Choreographer {
   }
 
   /**
-   * New fragments just landed: look toward them (yaw/pitch for the head), then answer with a short
-   * move from their region, sized by how forcefully they were said. The plan resumes after.
+   * New fragments just landed: look toward them (yaw/pitch for the head), then answer. Half the time,
+   * when it can, the answer goes to where they landed (a reach, a touch); otherwise it's a short move
+   * from their region, sized by how forcefully they were said. The plan resumes after.
    */
-  react(t: number, region: number, intensity: number, look: { yaw: number; pitch: number }) {
+  react(t: number, region: number, intensity: number, look: { yaw: number; pitch: number }, land?: Landing) {
     if (this.hour < 0 || this.idle === null) return;
     const local = t - this.hour * 3600;
     const r = rngFor(`${this.seed}:react:${Math.floor(t * 10)}`);
     const from = this.poseAt(local);
     const notice: Pose = { ...from, yaw: look.yaw, pitch: look.pitch, roll: look.yaw * -0.08 };
+    const aimed = land ? AIMED.filter((m) => aimable(m, land)) : [];
     const options = REACTIONS[region] ?? REACTIONS[0];
-    const move = options[Math.floor(r() * options.length)];
-    const { fidget, ...moved } = move.pose(r);
-    const size = 0.5 + 0.5 * Math.min(1, Math.max(0, intensity));
-    const target: Pose = { ...from, ...UPPER_REST, ...moved };
+    const useAim = aimed.length > 0 && r() < 0.5;
+    const move: Move = useAim ? aimed[Math.floor(r() * aimed.length)] : options[Math.floor(r() * options.length)];
+    const { fidget, ...moved } = move.pose(r, land);
+    // An aimed answer goes all the way: half a reach would miss.
+    const size = useAim ? 1 : 0.5 + 0.5 * Math.min(1, Math.max(0, intensity));
+    const target: Pose = { ...from, ...UPPER_REST, ...(useAim ? { yaw: look.yaw, pitch: look.pitch } : {}), ...moved };
     const answer = lerpPose({ ...from, ...UPPER_REST }, target, size);
+    const span = (x: [number, number]) => x[0] + (x[1] - x[0]) * r();
+    const [turn, hold] = useAim ? [span(move.turn), span(move.hold)] : [1.6, 3 + 2 * r()];
     const beats: Beat[] = [
       { name: "notice", from, to: notice, start: local, turn: 0.7, end: local + 1.6 },
-      { name: `${move.name} (answer)`, fidget, from: notice, to: answer, start: local + 1.6, turn: 1.6, end: local + 1.6 + 1.6 + 3 + 2 * r() },
+      { name: `${move.name} (answer)`, fidget, from: notice, to: answer, start: local + 1.6, turn, end: local + 1.6 + turn + hold },
     ];
-    const resume = beats[1].end;
-    this.last = answer;
+    const then = useAim && land ? (move as AimedMove).then?.(r, land) : undefined;
+    if (then) {
+      const start = beats[1].end;
+      beats.push({ name: `${move.name} (then)`, from: answer, to: { ...answer, ...UPPER_REST, ...then }, start, turn: 1.5, end: start + 1.5 + 2.5 + r() });
+    }
+    const resume = beats[beats.length - 1].end;
+    this.last = beats[beats.length - 1].to;
     const idle = this.idle;
     this.build(this.hour, idle, resume, this.mode);
     this.beats = [...beats, ...this.beats];

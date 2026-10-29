@@ -17,7 +17,7 @@ import { configureSmear, createSmearPass } from "./passes";
 import { applyEffects, createGradePass, DEFAULT_EFFECTS, EFFECTS, type Effects } from "./grade";
 import { ASCII_ATLAS, ASCII_RAMP, createAsciiAtlas } from "./atlas";
 import { hash01 } from "./rng";
-import { Choreographer, isAirPose, stillPose, type Idle, type Mood, type Pose } from "./idle";
+import { Choreographer, isAirPose, stillPose, type Idle, type Landing, type Mood, type Pose } from "./idle";
 import { IMAGE_SIZE, SHOTS } from "./imagery";
 import { DEFAULT_LOOK } from "./defaultLook";
 
@@ -1180,26 +1180,45 @@ export class LegendEngine {
     const sum: Mood = [0, 0, 0, 0];
     let intensity = 0;
     const at = new THREE.Vector3();
-    let n = 0;
+    const normal = new THREE.Vector3();
+    const { pos, normal: normals, layer, arm } = this.anchors;
+    let n = 0, onBody = 0, onArm = 0;
     for (const i of burst) {
       const f = this.fragments[i];
       f.weights.forEach((w, k) => (sum[k] += w));
       intensity = Math.max(intensity, f.intensity);
       const a = this.placement.anchorOf[i];
       if (a >= 0) {
-        at.x += this.anchors.pos[a * 3];
-        at.y += this.anchors.pos[a * 3 + 1];
-        at.z += this.anchors.pos[a * 3 + 2];
+        at.x += pos[a * 3];
+        at.y += pos[a * 3 + 1];
+        at.z += pos[a * 3 + 2];
+        normal.x += normals[a * 3];
+        normal.y += normals[a * 3 + 1];
+        normal.z += normals[a * 3 + 2];
+        if (layer[a] === 0) onBody++;
+        if (arm[a]) onArm += Math.sign(pos[a * 3]);
         n++;
       }
     }
     if (n) at.divideScalar(n);
     else at.set(0, 0.55, 1);
+    // Where it landed, for an answer in place: on the body if most of the burst did.
+    const body = this.style.body;
+    const land: Landing | undefined = n
+      ? {
+          at: [at.x, at.y, at.z],
+          normal: normal.normalize().toArray() as [number, number, number],
+          onBody: onBody * 2 > n,
+          arm: Math.abs(onArm) * 2 > n ? Math.sign(onArm) : 0,
+          shoulderX: shoulderX(body),
+          elbowX: elbowX(body),
+        }
+      : undefined;
     // From the head: a burst on the chest is a look down at it; one out in the aura, a look out.
     const d = at.sub(new THREE.Vector3(0, 0.55, 0.05));
     const yaw = Math.max(-0.9, Math.min(0.9, Math.atan2(d.x, Math.max(0.05, d.z))));
     const pitch = Math.max(-0.5, Math.min(0.55, Math.atan2(-d.y, Math.hypot(d.x, d.z))));
-    this.choreographer.react(t, sum.indexOf(Math.max(...sum)), intensity, { yaw, pitch });
+    this.choreographer.react(t, sum.indexOf(Math.max(...sum)), intensity, { yaw, pitch }, land);
     this.lastReaction = t;
   }
 
