@@ -94,7 +94,7 @@ project a prompt came from is a separate toggle, off by default. Everything stay
 - **Placement** is deterministic: the same fragments in the same order always draw the same body.
   Intense thoughts condense into the organs (brain, heart, gut); passing remarks form the skin and
   slowly grow the arms and legs. A full region deepens rather than spilling over: its nodes take more
-  points and glow brighter, and full limbs deepen the same way so they keep pace with the core.
+  points and glow brighter.
 - **Spirit** fills a seven-layer aura around the body.
 - **The ether** is time. A growing share of what you say, released in golden-ratio steps at
   Fibonacci counts, drifts into the space around the figure and loosens it, until after years of

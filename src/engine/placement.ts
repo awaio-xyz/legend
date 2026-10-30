@@ -10,8 +10,7 @@
 //   body:  the rest, the head, heart, gut and the spirit's aura, by region match.
 // A route with no room left falls through to the next. When a fragment's own region is full, it
 // deepens an existing node of that region instead of spilling into another: the node takes a second
-// point on top of the first, so a full heart keeps its shape and burns hotter. Full limbs deepen the
-// same way, evenly, so they keep pace with the core instead of passing their remarks to it.
+// point on top of the first, so a full heart keeps its shape and burns hotter.
 //
 // Built to scale to tens of thousands of fragments. Free anchors live in buckets by kind and
 // dominant region, so each fragment scores a seeded sample of likely candidates instead of every
@@ -147,10 +146,6 @@ export class Placement {
     if (ether) best = this.pickSpread(VOID, ETHER_REACH, rand);
     else if (limb) best = this.pickSpread(LIMBS, LIMB_REACH, rand);
     let deepened = false;
-    if (best < 0 && limb && !ether) {
-      best = this.deepenLimbs(rand);
-      deepened = best >= 0;
-    }
     if (best < 0 && !ether) {
       const { fw, own } = this.mixOf(f);
       if (this.buckets[own].length) best = this.pickBody(fw, own, f.intensity, rand);
@@ -197,24 +192,6 @@ export class Placement {
       let err = 0;
       for (let r = 0; r < R; r++) err += Math.abs(fw[r] - weights[i * R + r]);
       const s = -err * 0.8 - this.stack[i] * DEEPEN_SPREAD + core[i] * pull + rand() * 0.01;
-      if (s > bestScore) {
-        bestScore = s;
-        best = i;
-      }
-    }
-    return best;
-  }
-
-  /** Full limbs: add to the least deepened limb node, the patch breaking ties. */
-  private deepenLimbs(rand: () => number): number {
-    const list = this.taken[this.regions + 1];
-    if (!list.length) return -1;
-    const n = Math.min(list.length, QUOTA_DEEPEN);
-    let best = -1;
-    let bestScore = -Infinity;
-    for (let k = 0; k < n; k++) {
-      const i = list.length === n ? list[k] : list[Math.floor(rand() * list.length)];
-      const s = -this.stack[i] + this.patch[i] * 0.5 + rand() * 0.01;
       if (s > bestScore) {
         bestScore = s;
         best = i;
