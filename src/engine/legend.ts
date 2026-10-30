@@ -1408,6 +1408,9 @@ export class LegendEngine {
     // Points are sized in pixels, so a small window (the widget) drew them far bigger relative to the
     // figure: they piled up and blew out. Below VIEW_HEIGHT they shrink with the window instead.
     this.shared.uViewScale.value = Math.min(1, Math.max(0.15, h / VIEW_HEIGHT));
+    // Resizing clears the canvas, and this runs after the frame was drawn, so draw again now or the
+    // window shows a blank frame at every step of a resize.
+    this.composer.render();
   }
 
   private emitStats() {

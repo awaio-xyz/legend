@@ -6,7 +6,7 @@
 // lens, zoom, and whether a drag moves the window or explores the figure. It wears whatever look
 // the full app last had.
 import { useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { drawGenome, makeSeed } from "../engine/genome";
 import { DEFAULT_SIM } from "../engine/fragments";
 import { DEFAULT_STYLE, LegendEngine, type Style } from "../engine/legend";
@@ -32,6 +32,7 @@ interface Prefs {
 }
 const DEFAULT_PREFS: Prefs = { shape: "circle", corner: 8, ring: false, ringWidth: 3, fisheye: false, vignette: 0.3, zoom: 1, explore: false };
 const FISHEYE = 0.7;
+const MIN_SIDE = 120; // matches minWidth / minHeight in tauri.conf.json
 
 const readPrefs = (): Prefs => {
   try {
@@ -71,6 +72,22 @@ export function Widget() {
   const [settings, setSettings] = useState(false);
   const [empty, setEmpty] = useState(false);
   const set = (patch: Partial<Prefs>) => setPrefs((p) => ({ ...p, ...patch }));
+  // When the right button last went down here. Windows can fire a stray contextmenu around a native
+  // window drag, so the menu only opens for a real right-click.
+  const rightDown = useRef(0);
+
+  // The menu closes on Escape and when the widget loses focus, as well as on any click outside it.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", close);
+    };
+  }, [menu]);
 
   useEffect(() => {
     document.documentElement.classList.add("widget-mode");
@@ -146,13 +163,45 @@ export function Widget() {
 
   const drag = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    rightDown.current = 0;
     setMenu(null);
     setSettings(false);
     getCurrentWindow().startDragging();
   };
-  const resize = (e: React.MouseEvent) => {
+  // Resized here rather than by the OS, so the window is square at every step. Letting the OS resize
+  // freely and snapping it back afterwards made the two fight, and the widget flickered between sizes.
+  const resize = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
-    getCurrentWindow().startResizeDragging("SouthEast");
+    const grip = e.currentTarget, id = e.pointerId;
+    grip.setPointerCapture(id);
+    const win = getCurrentWindow();
+    const base = Math.max(window.innerWidth, window.innerHeight), x0 = e.screenX, y0 = e.screenY;
+    const most = Math.max(MIN_SIDE, Math.min(screen.availWidth, screen.availHeight));
+    let want = base, sent = base, queued = false;
+    const send = () => {
+      queued = false;
+      if (want === sent) return;
+      sent = want;
+      win.setSize(new LogicalSize(want, want)).catch(() => {});
+    };
+    const move = (m: PointerEvent) => {
+      want = Math.round(Math.min(most, Math.max(MIN_SIDE, base + Math.max(m.screenX - x0, m.screenY - y0))));
+      if (!queued) {
+        queued = true;
+        requestAnimationFrame(send);
+      }
+    };
+    const up = () => {
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", up);
+      grip.removeEventListener("pointercancel", up);
+      if (grip.hasPointerCapture(id)) grip.releasePointerCapture(id);
+      send();
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up);
+    grip.addEventListener("pointercancel", up);
   };
   const item = (label: string, act: () => void) => (
     <button
@@ -168,8 +217,15 @@ export function Widget() {
   return (
     <div
       className="widget-shell"
+      onPointerDownCapture={(e) => {
+        if (e.button === 2) rightDown.current = performance.now();
+        if (menu && !(e.target as HTMLElement).closest(".widget-menu")) setMenu(null);
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
+        const real = performance.now() - rightDown.current < 1000;
+        rightDown.current = 0;
+        if (!real) return;
         setSettings(false);
         setMenu({ x: e.clientX, y: e.clientY });
       }}
@@ -188,7 +244,7 @@ export function Widget() {
           <Gear />
         </button>
       </div>
-      <div className="widget-grip" onMouseDown={resize} />
+      <div className="widget-grip" onPointerDown={resize} />
       {settings && (
         <div className="widget-settings">
           <Row label="drag">
