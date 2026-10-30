@@ -33,6 +33,10 @@ export type Polygon = "off" | "wire" | "facets";
 /** What the light tells: which part of the data colour follows. */
 export type ColourStory = "region" | "topic" | "time" | "intensity";
 const COLOUR_STORY: Record<ColourStory, number> = { region: 0, topic: 1, time: 2, intensity: 3 };
+const smooth01 = (e0: number, e1: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+};
 
 
 /** What the user may change (decision 6). `null` means "use the genome's value". */
@@ -639,7 +643,7 @@ export class LegendEngine {
 
   private buildPoints() {
     const n = this.fragments.length;
-    const { pos, normal, fray, cores, field, path, neural, layer } = this.anchors;
+    const { pos, normal, fray, cores, field, path, neural, layer, reach } = this.anchors;
     const R = this.anchors.regions;
     const position = new Float32Array(n * 3);
     const aNormal = new Float32Array(n * 3);
@@ -654,6 +658,8 @@ export class LegendEngine {
     const aOrder = new Float32Array(n);
     const aPath = new Float32Array(n).fill(-1);
     const aNeural = new Float32Array(n);
+    const aLight = new Float32Array(n * 2);
+    const stacked = new Uint16Array(this.anchors.count);
     const jitter = this.genome.jitter * this.anchors.spacing;
 
     const egg = eggOf(this.style.body);
@@ -675,6 +681,7 @@ export class LegendEngine {
         aLayer[i] = ETHER_LAYER;
         aTopic[i] = hash01(`topic:${f.topic}`);
         aOrder[i] = n > 1 ? i / (n - 1) : 1;
+        aLight[i * 2] = 1;
         return;
       }
       // Jitter pushes each node off its anchor in a direction fixed by its id.
@@ -692,6 +699,14 @@ export class LegendEngine {
       aOrder[i] = n > 1 ? i / (n - 1) : 1;
       aPath[i] = path[a];
       aNeural[i] = neural[a];
+      // A deepened body node's k-th point adds sqrt(k) - sqrt(k-1) of a point's light, so a node of k
+      // points shines like sqrt(k): a full core burns hotter without swallowing the limbs. By arrival
+      // order, so each point keeps its share as more arrive, and time travel agrees. The aura keeps
+      // full light per point.
+      const k = ++stacked[a];
+      aLight[i * 2] = layer[a] === 0 ? Math.sqrt(k) - Math.sqrt(k - 1) : 1;
+      // Hands and feet are small and soften at the edge, so they get a little more light and size.
+      aLight[i * 2 + 1] = layer[a] === 0 ? smooth01(0.7, 0.95, reach[a]) : 0;
     });
 
     const geometry = new THREE.BufferGeometry();
@@ -711,6 +726,7 @@ export class LegendEngine {
     geometry.setAttribute("aMisc", new THREE.BufferAttribute(pack([aSeed, aIntensity, aFray, new Float32Array(n)]), 4));
     geometry.setAttribute("aData", new THREE.BufferAttribute(pack([aTopic, aOrder, aPath, aNeural]), 4));
     geometry.setAttribute("aBirth", new THREE.BufferAttribute(new Float32Array(n), 1));
+    geometry.setAttribute("aLight", new THREE.BufferAttribute(aLight, 2));
     this.pointSeed = aSeed;
     this.pointFray = aFray;
     this.pointLayer = aLayer;

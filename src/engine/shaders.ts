@@ -253,6 +253,7 @@ attribute vec4 aCores;      // head, heart, gut core masses; w is the layer (0 t
 attribute vec4 aMisc;       // seed, intensity, fray, glyph
 attribute vec4 aData;       // topic hash, order (0 oldest → 1 newest), gut path (-1 off the gut), brain activity
 attribute float aBirth;
+attribute vec2 aLight;      // this point's share of its node's light (deepened nodes add less), extremity 0–1
 
 uniform float uPixelRatio;
 uniform float uViewScale;
@@ -329,7 +330,8 @@ void main() {
               // The aura is sparse, spread over an egg far wider than the body, so its nodes are drawn
               // larger: at the body's size they were single dim pixels and the aura vanished.
               * mix(1.0, 2.2, aura)
-              * (1.0 - space * 0.45);                // space: small, like stars
+              * (1.0 - space * 0.45)                 // space: small, like stars
+              * (1.0 + aLight.y * 0.35);             // hands and feet: sparse, so a little larger
   float flash = 2.0;
   if (uLanding < 0.5) size *= 1.0 + flare * 5.0;
   else if (uLanding < 1.5) { size *= 1.0 + flare * 2.0; flash = 4.0; }
@@ -376,6 +378,7 @@ void main() {
   float flick = 1.0 - uFlicker * fract(sin(dot(vec2(aSeed, floor(T * 10.0)), vec2(12.9898, 78.233))) * 43758.5453);
   vColor = col * (0.35 + aIntensity * 0.65) * flick * (1.0 + uExhale * 0.6) * (1.0 + beat * 1.4) * (1.0 + flow * 3.0 + spike * 4.0) * (1.0 + flare * flash)
          * (1.0 - aFray * 0.75) * (1.0 - uEcho * 0.7) * asciiDim * (1.0 + mass * 0.7) * (1.0 - organ * 0.6) * mix(1.0, dot(aWeights.xyz, uRegionGain), organ) * uExposure
+         * aLight.x * (1.0 + aLight.y * 0.8)
          // The aura shimmers and thins toward its edge.
          * mix(1.0, uAuraLift * uSpiritGain * (0.9 - (aLayer - 1.0) * 0.07) * (0.85 + 0.15 * sin(T * 0.9 + aLayer * 0.9 + aSeed * 6.28)) * (1.0 + auraStir * auraStir * 1.8), aura)
          // Space twinkles: each star on its own slow rhythm.
