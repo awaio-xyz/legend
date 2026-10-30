@@ -18,9 +18,9 @@ export const CATEGORIES: { id: Category; label: string }[] = [
 /** Which style keys belong to each category, so one category can be randomised alone. */
 const KEYS: Record<Category, (keyof Style)[]> = {
   figure: ["body", "auraWarp", "grain"],
-  colour: ["hueShift", "harmony", "colours", "colourStory", "colourBleed", "variation", "auraHues", "glyphs", "glyphCycle", "asciiCycle"],
-  light: ["glowMaster", "glowBalance", "bodyLight", "regionGlow", "exposure", "coreGlow", "heartbeat", "gutFlow", "neural", "glow", "bloomRadius", "bloomThreshold"],
-  effects: ["fx", "smear", "smearAxis", "drift", "polygon", "meshScale", "wireStrength", "edgeStyle"],
+  colour: ["hueShift", "harmony", "colours", "colourStory", "colourBleed", "colourPurity", "variation", "auraHues", "glyphs", "glyphCycle", "asciiCycle"],
+  light: ["glowMaster", "glowBalance", "organHeat", "skinGlow", "regionGlow", "exposure", "coreGlow", "heartbeat", "gutFlow", "neural", "glow", "bloomRadius", "bloomThreshold"],
+  effects: ["fx", "smear", "smearAxis", "drift", "polygon", "meshScale", "wireStrength", "wireGlow", "edgeStyle"],
 };
 
 /** Randomise one category (or all of them), keeping the bust/body choice. */
@@ -99,6 +99,7 @@ export function ColourSection({ s, set, genome }: Props) {
       <Select<ColourStory> label="light tells" value={s.colourStory} options={[["region", "region"], ["topic", "topic"], ["time", "time (old → new)"], ["intensity", "intensity"]]} onChange={(v) => set({ colourStory: v })} />
       <Slider label="aura hues" hint="spirit ↔ chakra" min={0} max={1} step={0.01} value={s.auraHues} onChange={(v) => set({ auraHues: v })} />
       <Slider label="colour bleed" hint="sharp ↔ washed" min={0} max={1} step={0.01} value={s.colourBleed} onChange={(v) => set({ colourBleed: v })} />
+      <Slider label="colour purity" hint="mixed ↔ pure" min={0} max={1} step={0.01} value={s.colourPurity ?? 0} onChange={(v) => set({ colourPurity: v })} />
       <Slider label={s.colourStory === "time" ? "recent window" : "variation"} hint={s.colourStory === "time" ? "narrow ↔ wide" : "one ↔ many"} min={0} max={1} step={0.01} value={s.variation} onChange={(v) => set({ variation: v })} />
       <Select<GlyphPreset> label="glyphs" value={s.glyphs} options={[["genome", "genome"], ["dots", "dots"], ["glyphs", "glyph mix"], ["squares", "squares"], ["ascii", "ASCII"]]} onChange={(v) => set({ glyphs: v })} />
       <Slider label="glyph mix cycle" hint="still ↔ restless" min={0} max={1} step={0.01} value={s.glyphCycle} onChange={(v) => set({ glyphCycle: v })} />
@@ -112,7 +113,8 @@ export function LightSection({ s, set, genome }: Props) {
     <>
       <Slider label="overall glow" hint="dim ↔ blazing" min={0} max={1.5} step={0.01} value={s.glowMaster} onChange={(v) => set({ glowMaster: v })} />
       <Slider label="balance" hint="raw ↔ even" min={0} max={1} step={0.01} value={s.glowBalance} onChange={(v) => set({ glowBalance: v })} />
-      <Slider label="body light" hint="organs ↔ whole body" min={0} max={1} step={0.01} value={s.bodyLight ?? 0.5} onChange={(v) => set({ bodyLight: v })} />
+      <Slider label="organ heat" hint="flat ↔ blazing" min={0} max={1} step={0.01} value={s.organHeat ?? 0.5} onChange={(v) => set({ organHeat: v })} />
+      <Slider label="skin glow" hint="dim ↔ lit" min={0} max={1} step={0.01} value={s.skinGlow ?? 0} onChange={(v) => set({ skinGlow: v })} />
       {REGIONS.map((r, i) => (
         <Slider
           key={r}
@@ -146,7 +148,7 @@ type Subsection = EffectGroup | "motion" | "lines";
 function randomiseSubsection(s: Style, sub: Subsection): Partial<Style> {
   const rolled = randomStyle();
   if (sub === "motion") return { smear: rolled.smear, smearAxis: rolled.smearAxis, drift: rolled.drift };
-  if (sub === "lines") return { polygon: rolled.polygon, meshScale: rolled.meshScale, wireStrength: rolled.wireStrength, edgeStyle: rolled.edgeStyle };
+  if (sub === "lines") return { polygon: rolled.polygon, meshScale: rolled.meshScale, wireStrength: rolled.wireStrength, wireGlow: rolled.wireGlow, edgeStyle: rolled.edgeStyle };
   const keys = EFFECTS.filter((e) => e.group === sub).map((e) => e.key);
   return { fx: { ...s.fx, ...Object.fromEntries(keys.map((k) => [k, rolled.fx[k]])) } };
 }
@@ -210,6 +212,7 @@ export function EffectsSection({ s, set, genome }: Props) {
         <>
           <Slider label="mesh scale" hint="fine ↔ coarse" min={0} max={1} step={0.01} value={s.meshScale ?? 0} onChange={(v) => set({ meshScale: v })} />
           <Slider label="wire strength" hint="faint ↔ bright" min={0} max={3} step={0.01} value={s.wireStrength ?? 1} onChange={(v) => set({ wireStrength: v })} />
+          <Slider label="wire glow" hint="dim ↔ blooming" min={0} max={1} step={0.01} value={s.wireGlow ?? 0} onChange={(v) => set({ wireGlow: v })} />
         </>
       )}
       <Select<EdgeStyle | "genome">

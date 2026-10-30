@@ -229,7 +229,14 @@ uniform vec3 uHeart;
 uniform vec3 uGut;
 uniform vec3 uSpirit;
 uniform float uExposure;
-vec3 regionColour(vec4 w) { return uHead * w.x + uHeart * w.y + uGut * w.z + uSpirit * w.w; }
+uniform float uPurity;      // colour purity: 0 a node's region mix blends → 1 its strongest region's colour
+// Purity sharpens the mix toward its strongest region first, so mixed remarks keep a hue instead of
+// averaging four colours to white.
+vec3 regionColour(vec4 w) {
+  vec4 p = pow(max(w, 0.0), vec4(1.0 + uPurity * 6.0));
+  w = p / max(p.x + p.y + p.z + p.w, 1e-4);
+  return uHead * w.x + uHeart * w.y + uGut * w.z + uSpirit * w.w;
+}
 
 // Rotate hue in YIQ space: lets one region hold many colours.
 vec3 hueRotate(vec3 c, float a) {

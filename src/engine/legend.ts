@@ -54,6 +54,7 @@ export interface Style {
   polygon: Polygon;
   meshScale: number; // polygon mesh: 0 joins each node to its nearest → 1 a coarse lattice of big facets
   wireStrength: number; // how bright the polygon's wires and facets are
+  wireGlow: number; // 0 wires as faint as the nodes they join → 1 lifted out of the density dimming, bright enough to bloom
   grain: number; // 0 soft points that pool into a cloud → 1 crisp specks that shrink as the figure fills
   idle: Idle;
   auraWarp: number; // how far the aura parts around moving limbs (0 still, 1 default, 2 dramatic)
@@ -66,6 +67,7 @@ export interface Style {
   colourStory: ColourStory;
   colourBleed: number; // 0 hard region borders → 1 colour washes across the body
   variation: number; // how many colours a region may hold
+  colourPurity: number; // 0 a node's region mix blends (mixed remarks go pale) → 1 it takes its strongest region's colour
   // Light
   exposure: number;
   bloomRadius: number | null;
@@ -76,7 +78,8 @@ export interface Style {
   neural: number; // neurons firing in the brain
   glowMaster: number; // overall glow: dampens or lifts bloom and the organ masses together
   glowBalance: number; // 0 raw → 1 head, heart and gut glow evenly whatever their density and colour
-  bodyLight: number; // 0 the dense organs carry the light → 1 the whole body shines more evenly
+  organHeat: number; // how a deepened node's extra points add light: 0 each node one point of light → 1 dense organs blaze
+  skinGlow: number; // 0 the skin, limbs and gaps as dimmed as a full body needs → 1 lifted out of that dimming
   regionGlow: [head: number, heart: number, gut: number, spirit: number]; // per-region trims on top of the balance
   ghost: boolean;
   body: BodyParams;
@@ -97,6 +100,7 @@ const BASE_STYLE: Style = {
   polygon: "off",
   meshScale: 0,
   wireStrength: 1,
+  wireGlow: 0,
   grain: 0,
   idle: "watchful",
   auraWarp: 1,
@@ -108,6 +112,7 @@ const BASE_STYLE: Style = {
   colourStory: "region",
   colourBleed: 0.5,
   variation: 0.15,
+  colourPurity: 0,
   exposure: 1,
   bloomRadius: null,
   bloomThreshold: 0,
@@ -117,7 +122,8 @@ const BASE_STYLE: Style = {
   neural: 0.6,
   glowMaster: 1,
   glowBalance: 1,
-  bodyLight: 0.5,
+  organHeat: 0.5,
+  skinGlow: 0,
   regionGlow: [1, 1, 1, 1],
   ghost: false,
   body: DEFAULT_BODY,
@@ -145,6 +151,7 @@ export function randomStyle(): Style {
     polygon: pick(["off", "off", "wire", "facets"] as const),
     meshScale: r() < 0.35 ? 0 : r(),
     wireStrength: 0.6 + r() * 1.6,
+    wireGlow: r() < 0.5 ? 0 : r(),
     grain: r(),
     idle: pick(["calm", "watchful", "contemplative", "restless"] as const),
     auraWarp: 0.6 + r() * 1.2,
@@ -156,6 +163,7 @@ export function randomStyle(): Style {
     colourStory: pick(["region", "region", "topic", "time", "intensity"] as const),
     colourBleed: r(),
     variation: r() ** 2,
+    colourPurity: r() < 0.4 ? 0 : r(),
     exposure: 0.8 + r() * 0.5,
     bloomRadius: r(),
     bloomThreshold: r() < 0.7 ? 0 : r() * 0.3,
@@ -165,7 +173,8 @@ export function randomStyle(): Style {
     neural: r(),
     glowMaster: 0.5 + r() * 0.8,
     glowBalance: 0.6 + r() * 0.4,
-    bodyLight: r(),
+    organHeat: r(),
+    skinGlow: r() < 0.4 ? 0 : r(),
     regionGlow: [1, 1, 1, 1],
     ghost: false,
     // Effects: mostly gentle, now and then a strong look.
@@ -265,7 +274,6 @@ export class LegendEngine {
   private pointFray = new Float32Array(0);
   private pointLayer = new Float32Array(0);
   private bodyNodes = 0; // how much light each region's nodes put out
-  private bodyPoints = 0; // body points, a deepened node's extras included
   private auraNodes = 0; // distinct aura nodes: the aura's own density
 
   private body = new THREE.Group();
@@ -280,6 +288,7 @@ export class LegendEngine {
   private shared = {
     uTime: { value: 0 },
     uEcho: { value: 0 },
+    uPurity: { value: 0 },
     uDrift: { value: 0.01 },
     uFlowScale: { value: 3 },
     uFlowMode: { value: 0 },
@@ -538,21 +547,16 @@ export class LegendEngine {
     for (const o of [this.edges, this.wires, this.facets]) if (o) o.visible = this.cutoff === null;
     // The ether and the light as they were then.
     let ether = 0;
-    let bodyPoints = 0;
     const nodes = new Set<number>();
     const aura = new Set<number>();
     for (let i = 0; i < k; i++) {
       const a = this.placement.anchorOf[i];
       if (a < 0 || this.pointLayer[i] >= SPACE_LAYER) ether++;
-      else if (this.pointLayer[i] === 0) {
-        nodes.add(a);
-        bodyPoints++;
-      }
+      else if (this.pointLayer[i] === 0) nodes.add(a);
       else aura.add(a);
     }
     this.shared.uEther.value = ether / ETHER_FULL;
     this.bodyNodes = nodes.size;
-    this.bodyPoints = bodyPoints;
     this.auraNodes = aura.size;
   }
 
@@ -726,7 +730,7 @@ export class LegendEngine {
       aPath[i] = path[a];
       aNeural[i] = neural[a];
       // Which point this is on its node (1 the first): a deepened body node's later points add less
-      // light (see bodyLight). By arrival order, so each point keeps its share as more arrive, and
+      // light (see organHeat). By arrival order, so each point keeps its share as more arrive, and
       // time travel agrees. The aura keeps full light per point.
       const k = ++stacked[a];
       aLight[i * 2] = layer[a] === 0 ? k : 1;
@@ -757,7 +761,6 @@ export class LegendEngine {
     this.pointLayer = aLayer;
     // Distinct body anchors: a deepened node's extra points add light rather than dimming the rest.
     this.bodyNodes = new Set(this.placement.anchorOf.filter((a, i) => a >= 0 && aLayer[i] === 0)).size;
-    this.bodyPoints = this.placement.anchorOf.filter((a, i) => a >= 0 && aLayer[i] === 0).length;
     this.auraNodes = new Set(this.placement.anchorOf.filter((a, i) => a >= 0 && aLayer[i] >= 1 && aLayer[i] <= 7)).size;
     // Every ether node pulls the figure a little further apart.
     this.shared.uEther.value = ether / ETHER_FULL;
@@ -1134,28 +1137,25 @@ export class LegendEngine {
     const auraDensity = Math.min(1, (3000 / Math.max(this.auraNodes, 1)) ** 0.35);
     this.pointUniforms.uAuraLift.value = (auraDensity / Math.max(density, 1e-3)) * (1 / (1 + 1.5 * this.shared.uEther.value));
     this.pointUniforms.uColourBleed.value = s.colourBleed;
+    this.shared.uPurity.value = s.colourPurity ?? 0;
     this.pointUniforms.uColourMode.value = COLOUR_STORY[s.colourStory];
     this.pointUniforms.uVariation.value = s.variation;
     this.pointUniforms.uCoreGlow.value = s.coreGlow * s.glowMaster;
-    // Body light: a deepened node's k-th point adds k^p - (k-1)^p of a point's light. p 1 lets dense
+    // Organ heat: a deepened node's k-th point adds k^p - (k-1)^p of a point's light. p 1 lets dense
     // organs blaze; 0.5 (the default) shines like sqrt(k); near 0 every node is one point of light.
-    // Past the middle the skin and limbs are lifted too, up to most of the way out of the density
-    // dimming below, which only the organs' own glow can otherwise outshine: the whole body reads.
-    const bodyLight = s.bodyLight ?? 0.5;
-    const p = Math.max(0.05, 1 - bodyLight);
-    this.pointUniforms.uStackPow.value = p;
-    // It moves light between the organs and the rest rather than adding or removing it: the body's
-    // total stays where the default (sqrt) puts it, judged by the average node's depth.
-    const depth = this.bodyPoints / Math.max(this.bodyNodes, 1);
-    const undim = (1 / Math.max(density, 1e-3)) ** 0.7 - 1;
-    this.pointUniforms.uSkinLift.value = (1 + Math.max(0, bodyLight - 0.5) * 2 * undim) * depth ** (0.5 - p);
+    this.pointUniforms.uStackPow.value = Math.max(0.05, s.organHeat ?? 0.5);
+    // Skin glow: the skin, limbs and gaps, lifted out of the density dimming above, which only the
+    // organs' own glow can otherwise outshine. At 1 they shine as if the body were still sparse.
+    const undim = (1 / Math.max(density, 1e-3)) ** 0.8 - 1;
+    this.pointUniforms.uSkinLift.value = 1 + (s.skinGlow ?? 0) * undim;
     // Grain: crisper points, and smaller as the body fills, so a full figure reads as specks, not fog.
     const grain = s.grain ?? 0;
     const shrink = Math.min(1, Math.max(0.45, (8000 / Math.max(this.bodyNodes, 1)) ** 0.3));
     this.pointUniforms.uGrain.value = grain;
     this.pointUniforms.uGrainSize.value = 1 + (0.75 * shrink - 1) * grain;
     // The polygon: a coarse mesh has far fewer lines, so each can carry more light.
-    const wires = (s.wireStrength ?? 1) * (1 + 3 * (s.meshScale ?? 0));
+    // Wire glow lifts them out of the density dimming too, far enough to bloom.
+    const wires = (s.wireStrength ?? 1) * (1 + 3 * (s.meshScale ?? 0)) * (1 + (s.wireGlow ?? 0) * 3 * (1 / Math.max(density, 1e-3)) ** 0.8);
     this.wireAlpha.value = 0.035 * wires;
     this.facetAlpha.value = 0.012 * wires;
     this.pointUniforms.uHeartbeat.value = s.heartbeat;
