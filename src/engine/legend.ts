@@ -52,6 +52,9 @@ export interface Style {
   drift: number | null;
   glow: number | null;
   polygon: Polygon;
+  meshScale: number; // polygon mesh: 0 joins each node to its nearest → 1 a coarse lattice of big facets
+  wireStrength: number; // how bright the polygon's wires and facets are
+  grain: number; // 0 soft points that pool into a cloud → 1 crisp specks that shrink as the figure fills
   idle: Idle;
   auraWarp: number; // how far the aura parts around moving limbs (0 still, 1 default, 2 dramatic)
   walk: boolean; // body mode: wander the space on a journey of routes, or stand
@@ -73,6 +76,7 @@ export interface Style {
   neural: number; // neurons firing in the brain
   glowMaster: number; // overall glow: dampens or lifts bloom and the organ masses together
   glowBalance: number; // 0 raw → 1 head, heart and gut glow evenly whatever their density and colour
+  bodyLight: number; // 0 the dense organs carry the light → 1 the whole body shines more evenly
   regionGlow: [head: number, heart: number, gut: number, spirit: number]; // per-region trims on top of the balance
   ghost: boolean;
   body: BodyParams;
@@ -91,6 +95,9 @@ const BASE_STYLE: Style = {
   drift: null,
   glow: null,
   polygon: "off",
+  meshScale: 0,
+  wireStrength: 1,
+  grain: 0,
   idle: "watchful",
   auraWarp: 1,
   walk: false,
@@ -110,6 +117,7 @@ const BASE_STYLE: Style = {
   neural: 0.6,
   glowMaster: 1,
   glowBalance: 1,
+  bodyLight: 0.5,
   regionGlow: [1, 1, 1, 1],
   ghost: false,
   body: DEFAULT_BODY,
@@ -135,6 +143,9 @@ export function randomStyle(): Style {
     drift: 0.002 + r() ** 1.5 * 0.04,
     glow: r(),
     polygon: pick(["off", "off", "wire", "facets"] as const),
+    meshScale: r() < 0.35 ? 0 : r(),
+    wireStrength: 0.6 + r() * 1.6,
+    grain: r(),
     idle: pick(["calm", "watchful", "contemplative", "restless"] as const),
     auraWarp: 0.6 + r() * 1.2,
     walk: r() < 0.6,
@@ -154,6 +165,7 @@ export function randomStyle(): Style {
     neural: r(),
     glowMaster: 0.5 + r() * 0.8,
     glowBalance: 0.6 + r() * 0.4,
+    bodyLight: r(),
     regionGlow: [1, 1, 1, 1],
     ghost: false,
     // Effects: mostly gentle, now and then a strong look.
@@ -193,6 +205,10 @@ const VIEW_HEIGHT = 900; // window height (CSS px) at and above which points are
 const ETHER_FULL = 120000; // ether nodes at which the figure has spread about as far as it will (uEther 1)
 const POLY_RADIUS = 0.045; // polygon mode joins each node to its nearest neighbours within this
 const POLY_NEIGHBOURS = 3;
+// Mesh scale: at 0 the polygon joins every node to its nearest, a centimetre or so away, which
+// pools into fuzz in a full figure. Above 0 it joins one node per lattice cell instead, up to this
+// size, so the facets stay big and readable however many nodes there are.
+const MESH_CELL_MIN = 0.012, MESH_CELL_MAX = 0.085;
 /** Lines must never join the two legs: they'd stretch across the gap with every stride. */
 const acrossLegs = (ax: number, ay: number, bx: number, by: number) => ay < -0.3 && by < -0.3 && Math.sign(ax) !== Math.sign(bx);
 
@@ -249,6 +265,7 @@ export class LegendEngine {
   private pointFray = new Float32Array(0);
   private pointLayer = new Float32Array(0);
   private bodyNodes = 0; // how much light each region's nodes put out
+  private bodyPoints = 0; // body points, a deepened node's extras included
   private auraNodes = 0; // distinct aura nodes: the aura's own density
 
   private body = new THREE.Group();
@@ -343,6 +360,10 @@ export class LegendEngine {
     uSpiritGain: { value: 1 },
     uAuraLift: { value: 1 }, // the aura's own exposure, undoing the body's density dimming
     uAuraHues: { value: 1 },
+    uGrain: { value: 0 },
+    uGrainSize: { value: 1 },
+    uStackPow: { value: 0.5 },
+    uSkinLift: { value: 1 },
   };
   private edgeAlpha = { value: 0.04 };
   private wireAlpha = { value: 0.035 };
@@ -413,7 +434,7 @@ export class LegendEngine {
     } else {
       if (style.glyphs !== prev.glyphs) this.writeGlyphs();
       if (style.edgeStyle !== prev.edgeStyle) this.buildEdges();
-      if (style.polygon !== prev.polygon) this.buildPolygon();
+      if (style.polygon !== prev.polygon || style.meshScale !== prev.meshScale) this.buildPolygon();
     }
     if (this.ghost) this.ghost.visible = style.ghost;
     this.applyLooks();
@@ -517,16 +538,21 @@ export class LegendEngine {
     for (const o of [this.edges, this.wires, this.facets]) if (o) o.visible = this.cutoff === null;
     // The ether and the light as they were then.
     let ether = 0;
+    let bodyPoints = 0;
     const nodes = new Set<number>();
     const aura = new Set<number>();
     for (let i = 0; i < k; i++) {
       const a = this.placement.anchorOf[i];
       if (a < 0 || this.pointLayer[i] >= SPACE_LAYER) ether++;
-      else if (this.pointLayer[i] === 0) nodes.add(a);
+      else if (this.pointLayer[i] === 0) {
+        nodes.add(a);
+        bodyPoints++;
+      }
       else aura.add(a);
     }
     this.shared.uEther.value = ether / ETHER_FULL;
     this.bodyNodes = nodes.size;
+    this.bodyPoints = bodyPoints;
     this.auraNodes = aura.size;
   }
 
@@ -699,12 +725,11 @@ export class LegendEngine {
       aOrder[i] = n > 1 ? i / (n - 1) : 1;
       aPath[i] = path[a];
       aNeural[i] = neural[a];
-      // A deepened body node's k-th point adds sqrt(k) - sqrt(k-1) of a point's light, so a node of k
-      // points shines like sqrt(k): a full core burns hotter without swallowing the limbs. By arrival
-      // order, so each point keeps its share as more arrive, and time travel agrees. The aura keeps
-      // full light per point.
+      // Which point this is on its node (1 the first): a deepened body node's later points add less
+      // light (see bodyLight). By arrival order, so each point keeps its share as more arrive, and
+      // time travel agrees. The aura keeps full light per point.
       const k = ++stacked[a];
-      aLight[i * 2] = layer[a] === 0 ? Math.sqrt(k) - Math.sqrt(k - 1) : 1;
+      aLight[i * 2] = layer[a] === 0 ? k : 1;
       // Hands and feet are small and soften at the edge, so they get a little more light and size.
       aLight[i * 2 + 1] = layer[a] === 0 ? smooth01(0.7, 0.95, reach[a]) : 0;
     });
@@ -732,6 +757,7 @@ export class LegendEngine {
     this.pointLayer = aLayer;
     // Distinct body anchors: a deepened node's extra points add light rather than dimming the rest.
     this.bodyNodes = new Set(this.placement.anchorOf.filter((a, i) => a >= 0 && aLayer[i] === 0)).size;
+    this.bodyPoints = this.placement.anchorOf.filter((a, i) => a >= 0 && aLayer[i] === 0).length;
     this.auraNodes = new Set(this.placement.anchorOf.filter((a, i) => a >= 0 && aLayer[i] >= 1 && aLayer[i] <= 7)).size;
     // Every ether node pulls the figure a little further apart.
     this.shared.uEther.value = ether / ETHER_FULL;
@@ -837,7 +863,19 @@ export class LegendEngine {
       seen.add(a);
       return true;
     });
-    const cell = POLY_RADIUS;
+    const scale = this.style.meshScale ?? 0;
+    const lattice = MESH_CELL_MIN + (MESH_CELL_MAX - MESH_CELL_MIN) * scale;
+    const radius = scale > 0 ? lattice * 1.8 : POLY_RADIUS;
+    if (scale > 0) {
+      // One node per lattice cell, the oldest, so the mesh holds still as the figure grows.
+      const reps = new Map<string, number>();
+      for (const i of placed) {
+        const k = `${Math.floor(P[i * 3] / lattice)},${Math.floor(P[i * 3 + 1] / lattice)},${Math.floor(P[i * 3 + 2] / lattice)}`;
+        if (!reps.has(k)) reps.set(k, i);
+      }
+      placed.splice(0, placed.length, ...reps.values());
+    }
+    const cell = radius;
     const key = (x: number, y: number, z: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
     const grid = new Map<string, number[]>();
     for (const i of placed) {
@@ -859,7 +897,7 @@ export class LegendEngine {
             for (const j of grid.get(`${cx + dx},${cy + dy},${cz + dz}`) ?? []) {
               if (j === i) continue;
               const d = Math.hypot(P[j * 3] - x, P[j * 3 + 1] - y, P[j * 3 + 2] - z);
-              if (d < POLY_RADIUS && !acrossLegs(x, y, P[j * 3], P[j * 3 + 1]) && this.pointFray[i] > 1.5 === this.pointFray[j] > 1.5) near.push([d, j]);
+              if (d < radius && !acrossLegs(x, y, P[j * 3], P[j * 3 + 1]) && this.pointFray[i] > 1.5 === this.pointFray[j] > 1.5) near.push([d, j]);
             }
       near.sort((a, b) => a[0] - b[0]);
       const nbrs = near.slice(0, POLY_NEIGHBOURS).map(([, j]) => j);
@@ -1099,6 +1137,27 @@ export class LegendEngine {
     this.pointUniforms.uColourMode.value = COLOUR_STORY[s.colourStory];
     this.pointUniforms.uVariation.value = s.variation;
     this.pointUniforms.uCoreGlow.value = s.coreGlow * s.glowMaster;
+    // Body light: a deepened node's k-th point adds k^p - (k-1)^p of a point's light. p 1 lets dense
+    // organs blaze; 0.5 (the default) shines like sqrt(k); near 0 every node is one point of light.
+    // Past the middle the skin and limbs are lifted too, up to most of the way out of the density
+    // dimming below, which only the organs' own glow can otherwise outshine: the whole body reads.
+    const bodyLight = s.bodyLight ?? 0.5;
+    const p = Math.max(0.05, 1 - bodyLight);
+    this.pointUniforms.uStackPow.value = p;
+    // It moves light between the organs and the rest rather than adding or removing it: the body's
+    // total stays where the default (sqrt) puts it, judged by the average node's depth.
+    const depth = this.bodyPoints / Math.max(this.bodyNodes, 1);
+    const undim = (1 / Math.max(density, 1e-3)) ** 0.7 - 1;
+    this.pointUniforms.uSkinLift.value = (1 + Math.max(0, bodyLight - 0.5) * 2 * undim) * depth ** (0.5 - p);
+    // Grain: crisper points, and smaller as the body fills, so a full figure reads as specks, not fog.
+    const grain = s.grain ?? 0;
+    const shrink = Math.min(1, Math.max(0.45, (8000 / Math.max(this.bodyNodes, 1)) ** 0.3));
+    this.pointUniforms.uGrain.value = grain;
+    this.pointUniforms.uGrainSize.value = 1 + (0.75 * shrink - 1) * grain;
+    // The polygon: a coarse mesh has far fewer lines, so each can carry more light.
+    const wires = (s.wireStrength ?? 1) * (1 + 3 * (s.meshScale ?? 0));
+    this.wireAlpha.value = 0.035 * wires;
+    this.facetAlpha.value = 0.012 * wires;
     this.pointUniforms.uHeartbeat.value = s.heartbeat;
     this.pointUniforms.uGutFlow.value = s.gutFlow;
     this.pointUniforms.uNeural.value = s.neural;

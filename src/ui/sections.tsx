@@ -17,10 +17,10 @@ export const CATEGORIES: { id: Category; label: string }[] = [
 
 /** Which style keys belong to each category, so one category can be randomised alone. */
 const KEYS: Record<Category, (keyof Style)[]> = {
-  figure: ["body", "auraWarp"],
+  figure: ["body", "auraWarp", "grain"],
   colour: ["hueShift", "harmony", "colours", "colourStory", "colourBleed", "variation", "auraHues", "glyphs", "glyphCycle", "asciiCycle"],
-  light: ["glowMaster", "glowBalance", "regionGlow", "exposure", "coreGlow", "heartbeat", "gutFlow", "neural", "glow", "bloomRadius", "bloomThreshold"],
-  effects: ["fx", "smear", "smearAxis", "drift", "polygon", "edgeStyle"],
+  light: ["glowMaster", "glowBalance", "bodyLight", "regionGlow", "exposure", "coreGlow", "heartbeat", "gutFlow", "neural", "glow", "bloomRadius", "bloomThreshold"],
+  effects: ["fx", "smear", "smearAxis", "drift", "polygon", "meshScale", "wireStrength", "edgeStyle"],
 };
 
 /** Randomise one category (or all of them), keeping the bust/body choice. */
@@ -58,6 +58,7 @@ export function FigureSection({ s, set }: Props) {
       {s.body.mode === "body" && <Toggle label="camera tracks" value={s.track} onChange={(v) => set({ track: v })} />}
       <Slider label="form" hint="masc ↔ fem" min={0} max={1} step={0.01} value={s.body.form} onChange={(v) => setBody({ form: v })} />
       <Slider label="build" hint="thin ↔ bulky" min={0.8} max={1.25} step={0.01} value={s.body.build} onChange={(v) => setBody({ build: v })} />
+      <Slider label="grain" hint="cloud ↔ crisp" min={0} max={1} step={0.01} value={s.grain ?? 0} onChange={(v) => set({ grain: v })} />
       <Slider label="shoulders" min={0.85} max={1.15} step={0.01} value={s.body.shoulders} onChange={(v) => setBody({ shoulders: v })} />
       <Slider label="head" min={0.85} max={1.15} step={0.01} value={s.body.head} onChange={(v) => setBody({ head: v })} />
       <Slider label="aura warp" hint="still ↔ dramatic" min={0} max={2} step={0.01} value={s.auraWarp ?? 1} onChange={(v) => set({ auraWarp: v })} />
@@ -111,6 +112,7 @@ export function LightSection({ s, set, genome }: Props) {
     <>
       <Slider label="overall glow" hint="dim ↔ blazing" min={0} max={1.5} step={0.01} value={s.glowMaster} onChange={(v) => set({ glowMaster: v })} />
       <Slider label="balance" hint="raw ↔ even" min={0} max={1} step={0.01} value={s.glowBalance} onChange={(v) => set({ glowBalance: v })} />
+      <Slider label="body light" hint="organs ↔ whole body" min={0} max={1} step={0.01} value={s.bodyLight ?? 0.5} onChange={(v) => set({ bodyLight: v })} />
       {REGIONS.map((r, i) => (
         <Slider
           key={r}
@@ -144,7 +146,7 @@ type Subsection = EffectGroup | "motion" | "lines";
 function randomiseSubsection(s: Style, sub: Subsection): Partial<Style> {
   const rolled = randomStyle();
   if (sub === "motion") return { smear: rolled.smear, smearAxis: rolled.smearAxis, drift: rolled.drift };
-  if (sub === "lines") return { polygon: rolled.polygon, edgeStyle: rolled.edgeStyle };
+  if (sub === "lines") return { polygon: rolled.polygon, meshScale: rolled.meshScale, wireStrength: rolled.wireStrength, edgeStyle: rolled.edgeStyle };
   const keys = EFFECTS.filter((e) => e.group === sub).map((e) => e.key);
   return { fx: { ...s.fx, ...Object.fromEntries(keys.map((k) => [k, rolled.fx[k]])) } };
 }
@@ -204,6 +206,12 @@ export function EffectsSection({ s, set, genome }: Props) {
       <Slider label={g("drift", s.drift !== null)} min={0} max={0.05} step={0.001} value={s.drift ?? genome.drift} onChange={(v) => set({ drift: v })} />
       <Head label="lines" onRoll={roll("lines")} />
       <Select<Polygon> label="polygon" value={s.polygon} options={["off", "wire", "facets"]} onChange={(v) => set({ polygon: v })} />
+      {s.polygon !== "off" && (
+        <>
+          <Slider label="mesh scale" hint="fine ↔ coarse" min={0} max={1} step={0.01} value={s.meshScale ?? 0} onChange={(v) => set({ meshScale: v })} />
+          <Slider label="wire strength" hint="faint ↔ bright" min={0} max={3} step={0.01} value={s.wireStrength ?? 1} onChange={(v) => set({ wireStrength: v })} />
+        </>
+      )}
       <Select<EdgeStyle | "genome">
         label="topic edges"
         value={s.edgeStyle ?? "genome"}

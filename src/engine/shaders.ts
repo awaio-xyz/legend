@@ -253,7 +253,7 @@ attribute vec4 aCores;      // head, heart, gut core masses; w is the layer (0 t
 attribute vec4 aMisc;       // seed, intensity, fray, glyph
 attribute vec4 aData;       // topic hash, order (0 oldest → 1 newest), gut path (-1 off the gut), brain activity
 attribute float aBirth;
-attribute vec2 aLight;      // this point's share of its node's light (deepened nodes add less), extremity 0–1
+attribute vec2 aLight;      // which point this is on its node (1 the first), extremity 0–1
 
 uniform float uPixelRatio;
 uniform float uViewScale;
@@ -274,6 +274,9 @@ uniform float uAsciiCycle;  // 0 still → ASCII characters keep changing
 uniform float uRampCells;   // the light-to-dense part of the atlas
 uniform float uAtlasCells;
 uniform float uSize;
+uniform float uGrainSize;   // grain: points shrink as the figure fills
+uniform float uStackPow;    // a deepened node's k-th point adds k^p - (k-1)^p of a point's light
+uniform float uSkinLift;    // body light: the skin and limbs, lifted toward the organs
 uniform float uBeatRate;    // Hz, from how often they talk (data)
 uniform float uPulseSharp;
 uniform float uFlicker;
@@ -331,7 +334,8 @@ void main() {
               // larger: at the body's size they were single dim pixels and the aura vanished.
               * mix(1.0, 2.2, aura)
               * (1.0 - space * 0.45)                 // space: small, like stars
-              * (1.0 + aLight.y * 0.35);             // hands and feet: sparse, so a little larger
+              * (1.0 + aLight.y * 0.35)              // hands and feet: sparse, so a little larger
+              * uGrainSize;
   float flash = 2.0;
   if (uLanding < 0.5) size *= 1.0 + flare * 5.0;
   else if (uLanding < 1.5) { size *= 1.0 + flare * 2.0; flash = 4.0; }
@@ -378,7 +382,10 @@ void main() {
   float flick = 1.0 - uFlicker * fract(sin(dot(vec2(aSeed, floor(T * 10.0)), vec2(12.9898, 78.233))) * 43758.5453);
   vColor = col * (0.35 + aIntensity * 0.65) * flick * (1.0 + uExhale * 0.6) * (1.0 + beat * 1.4) * (1.0 + flow * 3.0 + spike * 4.0) * (1.0 + flare * flash)
          * (1.0 - aFray * 0.75) * (1.0 - uEcho * 0.7) * asciiDim * (1.0 + mass * 0.7) * (1.0 - organ * 0.6) * mix(1.0, dot(aWeights.xyz, uRegionGain), organ) * uExposure
-         * aLight.x * (1.0 + aLight.y * 0.8)
+         * (aLight.x <= 1.0 ? 1.0 : pow(aLight.x, uStackPow) - pow(aLight.x - 1.0, uStackPow)) * (1.0 + aLight.y * 0.8)
+         * mix(1.0, uSkinLift, (1.0 - organ) * (1.0 - step(0.5, aLayer)))
+         // Grain shrinks the body's points: each carries the light its lost area held, so crisp isn't dim.
+         * mix(1.0, 1.0 / (uGrainSize * uGrainSize), 1.0 - step(0.5, aLayer))
          // The aura shimmers and thins toward its edge.
          * mix(1.0, uAuraLift * uSpiritGain * (0.9 - (aLayer - 1.0) * 0.07) * (0.85 + 0.15 * sin(T * 0.9 + aLayer * 0.9 + aSeed * 6.28)) * (1.0 + auraStir * auraStir * 1.8), aura)
          // Space twinkles: each star on its own slow rhythm.
@@ -389,6 +396,7 @@ void main() {
 export const POINTS_FRAG = /* glsl */ `
 uniform sampler2D uAtlas;
 uniform float uAtlasCells;
+uniform float uGrain;       // 0 soft dots → 1 crisp
 varying vec3 vColor;
 varying float vGlyph;
 varying float vCell;
@@ -406,7 +414,7 @@ void main() {
   vec2 uv = gl_PointCoord * 2.0 - 1.0;
   vec2 q = abs(uv);
   float a;
-  if (vGlyph < 0.5) { a = smoothstep(1.0, 0.0, length(uv)); a *= a; }                          // dot
+  if (vGlyph < 0.5) { float r = length(uv); a = smoothstep(1.0, 0.0, r); a = mix(a * a, smoothstep(1.0, 0.45, r), uGrain); } // dot: soft ↔ crisp (still reaching the edge, or tiny points vanish)
   else if (vGlyph < 1.5) a = smoothstep(0.16, 0.0, abs(max(q.x, q.y) - 0.7));                    // square
   else if (vGlyph < 2.5) a = smoothstep(0.14, 0.0, min(q.x, q.y)) * step(max(q.x, q.y), 0.85);  // cross
   else if (vGlyph < 3.5) a = smoothstep(0.14, 0.0, abs(triangle(uv * vec2(1.0, -1.0), 0.6)));   // triangle
