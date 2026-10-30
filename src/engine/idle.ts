@@ -558,6 +558,16 @@ const AIMED: AimedMove[] = [
     turn: [1.3, 1.7],
     weight: W(1, 1, 1, 1),
   },
+  {
+    name: "cups it in both hands",
+    aim: "aura",
+    // Each palm a little to its own side of the landing, so the hands close around it.
+    pose: (_r, land) =>
+      land ? { ...reachTo(1, [land.at[0] + 0.05, land.at[1], land.at[2]], land), ...reachTo(-1, [land.at[0] - 0.05, land.at[1], land.at[2]], land), shoulderL: 0.1, shoulderR: 0.1 } : {},
+    hold: [2.5, 4],
+    turn: [1.4, 1.8],
+    weight: W(1.2, 0.8, 1.4, 0.6),
+  },
   { name: "touches where it landed", aim: "body", pose: (r, land) => (land ? reachTo(handFor(r, land), onSkin(land), land) : {}), hold: [2.5, 4.5], turn: [1.3, 1.8], weight: W(1, 1, 1, 1) },
 ];
 /** Whether an aimed move can answer this landing: nothing reaches behind the body. */
