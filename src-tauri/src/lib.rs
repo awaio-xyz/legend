@@ -190,14 +190,16 @@ fn read_sessions(paths: Vec<String>, root: Option<String>) -> Vec<String> {
         .collect()
 }
 
-/// Save one image of a set into a folder the user chose (imagery). Takes a JPEG data URL.
+/// Save one file into a folder the user chose: an imagery still (JPEG) or a video clip (MP4). Takes
+/// a data URL; `ext` defaults to jpg.
 #[tauri::command]
-fn save_image(dir: String, name: String, data_url: String) -> Result<String, String> {
+fn save_image(dir: String, name: String, data_url: String, ext: Option<String>) -> Result<String, String> {
     use base64::Engine;
     let b64 = data_url.split_once(',').map(|(_, b)| b).ok_or("not a data URL")?;
     let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| e.to_string())?;
     let safe: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || "-_. ".contains(*c)).collect();
-    let path = Path::new(&dir).join(format!("{safe}.jpg"));
+    let ext: String = ext.unwrap_or_else(|| "jpg".into()).chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    let path = Path::new(&dir).join(format!("{safe}.{ext}"));
     fs::write(&path, bytes).map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().into_owned())
 }

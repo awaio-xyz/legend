@@ -25,12 +25,12 @@ interface WritableDir {
 }
 
 /** A folder to save into: the native dialog in the desktop app, the folder picker in a browser. */
-async function chooseFolder(): Promise<{ label: string; save: (name: string, dataUrl: string) => Promise<void> } | null> {
+export async function chooseFolder(): Promise<{ label: string; save: (name: string, dataUrl: string, ext?: string) => Promise<void> } | null> {
   if (inDesktop) {
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const dir = await open({ directory: true, title: "Save Legend imagery to…" });
+    const dir = await open({ directory: true, title: "Save to…" });
     if (typeof dir !== "string") return null;
-    return { label: dir, save: async (name, dataUrl) => void (await invoke("save_image", { dir, name, dataUrl })) };
+    return { label: dir, save: async (name, dataUrl, ext = "jpg") => void (await invoke("save_image", { dir, name, dataUrl, ext })) };
   }
   const picker = (window as unknown as { showDirectoryPicker?: (o: { mode: "readwrite" }) => Promise<WritableDir> }).showDirectoryPicker;
   if (!picker) throw new Error("This browser can't save to a folder. Use Chrome, Edge or the desktop app.");
@@ -42,8 +42,8 @@ async function chooseFolder(): Promise<{ label: string; save: (name: string, dat
   }
   return {
     label: dir.name,
-    save: async (name, dataUrl) => {
-      const file = await dir.getFileHandle(`${name}.jpg`, { create: true });
+    save: async (name, dataUrl, ext = "jpg") => {
+      const file = await dir.getFileHandle(`${name}.${ext}`, { create: true });
       const out = await file.createWritable();
       await out.write(await (await fetch(dataUrl)).blob());
       await out.close();

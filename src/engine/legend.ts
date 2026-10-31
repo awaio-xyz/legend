@@ -17,7 +17,8 @@ import { configureSmear, createSmearPass } from "./passes";
 import { applyEffects, createGradePass, DEFAULT_EFFECTS, EFFECTS, type Effects } from "./grade";
 import { ASCII_ATLAS, ASCII_RAMP, createAsciiAtlas } from "./atlas";
 import { hash01 } from "./rng";
-import { Choreographer, isAirPose, stillPose, type Idle, type Landing, type Mood, type Pose } from "./idle";
+import { Choreographer, isAirPose, reachTo, standingMoves, stillPose, type Idle, type Landing, type Mood, type Pose } from "./idle";
+import { planClip, shotFrame, videoSize, type Cue, type Energy } from "./director";
 import { pickLens, RATIOS, SHOTS, throughLens, type Lens, type Ratio } from "./imagery";
 import { growVeins, type Veins } from "./veins";
 import { DEFAULT_LOOK } from "./defaultLook";
@@ -256,6 +257,12 @@ export class LegendEngine {
   private afterimage = new AfterimagePass(0.5);
   private grade = createGradePass();
   private clock = new THREE.Clock();
+  // A video render sets the time itself, a frame at a time; otherwise it's the clock.
+  private virtualTime: number | null = null;
+  private filming = false; // the video director owns the camera
+  private now() {
+    return this.virtualTime ?? this.clock.getElapsedTime();
+  }
   private frame = 0;
   private resizeObserver: ResizeObserver;
   private liveTimer: number | undefined;
@@ -481,7 +488,7 @@ export class LegendEngine {
 
   /** New fragments from a watched vault: they land on the figure now, with the arrival flare. */
   addFragments(fragments: Fragment[]) {
-    const now = this.clock.getElapsedTime();
+    const now = this.now();
     for (const f of fragments) {
       this.fragments.push({ ...f, at: f.at ?? (f.t > 1e9 ? f.t : Date.now() / 1000) });
       this.placement.add(f);
@@ -544,10 +551,10 @@ export class LegendEngine {
       const f = { ...this.simulator.next(0), at: Date.now() / 1000 };
       this.fragments.push(f);
       this.placement.add(f);
-      this.births.push(this.clock.getElapsedTime());
-      this.birthOrder.push(this.clock.getElapsedTime());
+      this.births.push(this.now());
+      this.birthOrder.push(this.now());
       this.pending.push(this.fragments.length - 1);
-      this.lastArrival = this.clock.getElapsedTime();
+      this.lastArrival = this.now();
       this.buildLayers();
       this.emitStats();
     }, 900);
@@ -677,7 +684,7 @@ export class LegendEngine {
   }
 
   private resetBirths() {
-    const now = this.clock.getElapsedTime();
+    const now = this.now();
     this.births = this.fragments.map((f) => now + 0.5 + f.t);
     this.birthOrder = [...this.births].sort((a, b) => a - b);
     this.born = 0;
@@ -1293,7 +1300,14 @@ export class LegendEngine {
   // ── Loop ────────────────────────────────────────────────────────────────
 
   private tick() {
-    const t = this.clock.getElapsedTime();
+    this.update(this.now());
+    this.controls.update();
+    this.composer.render();
+    if (++this.frame % 30 === 0) this.emitStats();
+  }
+
+  /** Everything that moves at time t, short of drawing it. */
+  private update(t: number) {
     this.shared.uTime.value = t;
     this.smear.uniforms.uTime.value = t;
     applyEffects(this.grade, this.style.fx, t);
@@ -1305,9 +1319,6 @@ export class LegendEngine {
     this.animateIdle(t);
     this.animateWalk(t);
     this.animateFloat(t);
-    this.controls.update();
-    this.composer.render();
-    if (++this.frame % 30 === 0) this.emitStats();
   }
 
   /**
@@ -1493,7 +1504,7 @@ export class LegendEngine {
         this.camera.updateProjectionMatrix();
         this.camera.lookAt(target);
         this.grade.uniforms.fisheye.value = shot.fisheye ?? 0;
-        this.shared.uTime.value = this.clock.getElapsedTime();
+        this.shared.uTime.value = this.now();
         // Several passes, so the trails and afterimage settle on the new view.
         for (let k = 0; k < 6; k++) this.composer.render();
         out.push({ name: `${String(i + 1).padStart(2, "0")}-${shot.name}`, dataUrl: this.renderer.domElement.toDataURL("image/jpeg", 0.92) });
@@ -1517,6 +1528,123 @@ export class LegendEngine {
     return out;
   }
 
+  /**
+   * Video: a ten-second clip (director.ts plans the shots and cues), rendered frame by frame at a
+   * fixed 30 fps so it's smooth on any machine, and encoded to MP4 with the browser's own encoder.
+   * The figure keeps living through it: walking, breathing, beating, answering its cues. The live
+   * view pauses meanwhile and comes back as it was.
+   */
+  async captureVideo(o: { ratio: Ratio; lens: Lens; energy: Energy; seconds?: number; onProgress?: (done: number, total: number) => void }): Promise<Blob> {
+    const { BufferTarget, CanvasSource, getFirstEncodableVideoCodec, Mp4OutputFormat, Output } = await import("mediabunny");
+    const fps = 30, seconds = o.seconds ?? 10, total = fps * seconds;
+    const { width, height } = videoSize(o.ratio);
+    const codec = await getFirstEncodableVideoCodec(["avc", "vp9", "av1"], { width, height });
+    if (!codec) throw new Error("This system can't encode video.");
+    const body = this.style.body.mode === "body";
+    const plan = planClip(o.energy, seconds, o.lens, standingMoves(), body);
+
+    // Frames are copied to a plain canvas straight after drawing: the WebGL one can't be read later.
+    const frame = document.createElement("canvas");
+    frame.width = width;
+    frame.height = height;
+    const ctx = frame.getContext("2d")!;
+    const output = new Output({ format: new Mp4OutputFormat({ fastStart: "in-memory" }), target: new BufferTarget() });
+    // A fixed bitrate (about 11 Mbps at 1080p): left to a quality target, film grain and drifting
+    // points, which barely compress, ran a clip past 100 MB.
+    const source = new CanvasSource(frame, { codec, bitrate: Math.round(width * height * fps * 0.18) });
+    output.addVideoTrack(source, { frameRate: fps });
+    await output.start();
+
+    this.renderer.setAnimationLoop(null);
+    const saved = {
+      position: this.camera.position.clone(),
+      target: this.controls.target.clone(),
+      up: this.camera.up.clone(),
+      fov: this.camera.fov,
+      fisheye: this.grade.uniforms.fisheye.value as number,
+      pixelRatio: this.renderer.getPixelRatio(),
+    };
+    const t0 = this.now();
+    this.filming = true;
+    try {
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(width, height, false);
+      this.composer.setSize(width, height);
+      this.bloom.resolution.set(width, height);
+      this.smear.uniforms.uRes.value.set(width, height);
+      // Points keep the size they have relative to the figure in the live view.
+      const viewScale = this.shared.uViewScale.value * (height / Math.max(1, this.host.clientHeight));
+      const fired = new Set<Cue>();
+      // Each shot is framed from where the figure stood and faced when it began; a static shot
+      // stays put there, so a walk crosses the frame.
+      let anchorShot = -1;
+      const anchor = new THREE.Vector3();
+      let heading = 0;
+      for (let i = 0; i < total; i++) {
+        const local = i / fps;
+        const t = t0 + local;
+        this.virtualTime = t;
+        const k = Math.max(0, plan.findIndex((s) => local < s.end));
+        const shot = plan[k];
+        if (shot.cue && !fired.has(shot.cue) && local >= shot.cue.at) {
+          fired.add(shot.cue);
+          this.playCue(shot.cue, t);
+        }
+        this.update(t);
+
+        if (k !== anchorShot) {
+          anchorShot = k;
+          anchor.copy(this.body.position);
+          heading = this.body.rotation.y;
+        }
+        const follow = shot.kind === "static" ? anchor : this.body.position;
+        const f = shotFrame(shot, (local - shot.start) / (shot.end - shot.start), body);
+        const toWorld = (p: [number, number, number]) => new THREE.Vector3(...p).applyAxisAngle(new THREE.Vector3(0, 1, 0), heading).add(new THREE.Vector3(follow.x, follow.y, follow.z));
+        const target = toWorld(f.target);
+        this.camera.position.copy(toWorld(f.position));
+        this.camera.up.set(Math.sin(f.roll), Math.cos(f.roll), 0);
+        this.camera.fov = f.fov;
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+        this.camera.lookAt(target);
+        this.grade.uniforms.fisheye.value = f.fisheye;
+        this.shared.uViewScale.value = viewScale * f.pointScale;
+
+        this.composer.render();
+        ctx.drawImage(this.renderer.domElement, 0, 0, width, height);
+        await source.add(local, 1 / fps);
+        o.onProgress?.(i + 1, total);
+      }
+      source.close();
+      await output.finalize();
+      return new Blob([output.target.buffer!], { type: "video/mp4" });
+    } finally {
+      this.virtualTime = null;
+      this.filming = false;
+      this.renderer.setPixelRatio(saved.pixelRatio);
+      this.camera.position.copy(saved.position);
+      this.controls.target.copy(saved.target);
+      this.camera.up.copy(saved.up);
+      this.camera.fov = saved.fov;
+      this.grade.uniforms.fisheye.value = saved.fisheye;
+      this.resize();
+      this.renderer.setAnimationLoop(() => this.tick());
+    }
+  }
+
+  /** A director's cue: a standing move by name, or a hand out to a point the camera will follow. */
+  private playCue(cue: Cue, t: number) {
+    if (this.shared.uWalk.value > 0.5 && !cue.reach) return; // mid-stride: the gait has the body
+    if (cue.move) {
+      this.choreographer.cue(t, cue.move, stillPose(cue.move, this.genome.seed), 1.6, 3.5);
+      return;
+    }
+    if (!cue.reach) return;
+    const body = this.style.body;
+    const land: Landing = { at: cue.reach.point, normal: [0, 0, 1], onBody: false, arm: 0, shoulderX: shoulderX(body), elbowX: elbowX(body) };
+    this.choreographer.cue(t, "reaches out (cue)", { ...reachTo(cue.reach.side, cue.reach.point, land), shoulderL: 0.08, shoulderR: 0.08 }, 1.5, 6);
+  }
+
   /** Body mode: step the walk, move the figure through the space, and let the camera follow. */
   private animateWalk(t: number) {
     const dt = Math.min(0.1, t - this.lastTick);
@@ -1536,7 +1664,7 @@ export class LegendEngine {
     const delta = new THREE.Vector3(w.x - this.walkBase.x, 0, w.z - this.walkBase.z);
     this.walkBase = { x: w.x, z: w.z, heading: w.heading };
     // When tracking, the camera follows the walker, keeping whatever angle the user has orbited to.
-    if (this.style.track) {
+    if (this.style.track && !this.filming) {
       this.camera.position.add(delta);
       this.controls.target.add(delta);
     }
@@ -1592,7 +1720,7 @@ export class LegendEngine {
 
   private emitStats() {
     if (!this.onStats) return;
-    const now = this.clock.getElapsedTime();
+    const now = this.now();
     const regions: [number, number, number, number] = [0, 0, 0, 0];
     let placed = 0;
     let born = 0;

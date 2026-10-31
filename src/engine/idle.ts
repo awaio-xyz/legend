@@ -583,6 +583,8 @@ export function stillPose(name: string, seed = "still"): Pose {
   return { ...(air ? AIR_REST : REST), ...p };
 }
 export const isAirPose = (name: string) => AIR_MOVES.some((m) => m.name === name);
+/** The standing moves by name, for the video director to cue. */
+export const standingMoves = () => MOVES.map((m) => m.name);
 const MOVES_FOR: Record<ChoreoMode, Move[]> = { ground: MOVES, walk: WALK_MOVES, air: AIR_MOVES };
 const RECENT = 6; // a move doesn't come back until this many others have played
 
@@ -683,6 +685,22 @@ export class Choreographer {
     const idle = this.idle;
     this.build(this.hour, idle, resume, this.mode);
     this.beats = [...beats, ...this.beats];
+    this.cursor = 0;
+  }
+
+  /**
+   * Play a pose now (the video director cues a move or a reach for the camera), then resume the
+   * plan. `to` is the upper body to reach; the legs stay where the current beat has them.
+   */
+  cue(t: number, name: string, to: Partial<Pose>, turn: number, hold: number) {
+    if (this.hour < 0 || this.idle === null) return;
+    const local = t - this.hour * 3600;
+    const from = this.poseAt(local);
+    const target: Pose = { ...from, ...UPPER_REST, ...to };
+    const beat: Beat = { name, from, to: target, start: local, turn, end: local + turn + hold };
+    this.last = target;
+    this.build(this.hour, this.idle, beat.end, this.mode);
+    this.beats = [beat, ...this.beats];
     this.cursor = 0;
   }
 

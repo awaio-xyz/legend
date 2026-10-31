@@ -25,8 +25,10 @@ The desktop app needs [Rust](https://rustup.rs) and the Tauri prerequisites for 
 - **Bottom left:** settings (Figure, Colour, Light, Effects, Privacy, presets), randomise, stats
   (what your Legend is made of), timeline (your Legend over time, with time travel) and the folder
   (your Legend, recent vaults, or open any folder).
-- **Bottom right:** generate imagery (ten stills for sharing, in a ratio from 9:16 to cinemascope and
-  through a wide, long, fisheye or mixed lens) and Experiment (a simulated person to
+- **Bottom right:** generate a video (a 10 second MP4, shot by a director that plans one to four
+  camera moves and cues the figure, meditative or trailer energy, different every time), generate
+  imagery (ten stills for sharing, in a ratio from 9:16 to cinemascope and through a wide, long,
+  fisheye or mixed lens) and Experiment (a simulated person to
   explore, which never touches your own Legend).
 - **Top:** hide the interface (or **H**), undo and redo (**Ctrl+Z** / **Ctrl+Y**).
 - **The widget** (desktop app): a small frameless window that floats above every other window and
@@ -119,6 +121,7 @@ project a prompt came from is a separate toggle, off by default. Everything stay
 | `src/engine/placement.ts` | Where each fragment lands: routes, limbs, ether, deepening |
 | `src/engine/mannequin.ts` | The body (an SDF), its anchors, organs and aura |
 | `src/engine/shaders.ts` | Points, lines, motion, breathing, heartbeat and the aura, in GLSL |
+| `src/engine/director.ts` | The video director: shot plans, camera moves and cues for each clip |
 | `src/engine/veins.ts` | The vascular tree, grown through the nodes and guided by the major vessels |
 | `src/engine/idle.ts`, `walk.ts` | The library of moves and the walking journey |
 | `src/engine/genome.ts` | The genes and rare traits |

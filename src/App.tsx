@@ -7,6 +7,7 @@ import { Dock } from "./ui/Dock";
 import { pickVault, watchVault } from "./ui/vault";
 import { inDesktop, pickVaultFolder, publishView, readNativeVault, readRecent, rememberVault, toggleWidget, watchNativeVault, type RecentVault } from "./ui/desktop";
 import { Imagery } from "./ui/Imagery";
+import { Video } from "./ui/Video";
 import { Splash, SPLASH_BUILD_AT } from "./ui/Splash";
 import { Timeline } from "./ui/Timeline";
 import { useFlyout } from "./ui/flyout";
@@ -249,6 +250,7 @@ export default function App() {
         </div>
       )}
       {!hidden && <Imagery engine={getEngine} />}
+      {!hidden && <Video engine={getEngine} />}
       {!hidden && <Dock style={style} onStyle={setStyle} genome={genome} onOpen={openVault} recent={recent} loaded={source} stats={stats} timelineOpen={timeline} onTimeline={() => setTimeline((t) => !t)} />}
       {!hidden && timeline && <Timeline engine={getEngine} stats={stats} onClose={() => setTimeline(false)} />}
       {!hidden && (

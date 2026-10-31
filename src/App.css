@@ -142,6 +142,7 @@ button.mini { margin: 0; padding: 0 5px; }
 .dock-btn:hover { transform: translateY(-1px); }
 .dev-btn { position: relative; }
 .imagery { position: absolute; right: 70px; bottom: 18px; }
+.video { position: absolute; right: 122px; bottom: 18px; }
 .confirm.imagery-pop { left: auto; right: 0; bottom: 52px; } /* opens leftward, inside the window */
 .imagery-opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; font-size: 10px; color: var(--muted); }
 .imagery-opt select { flex: 1; max-width: 150px; }
