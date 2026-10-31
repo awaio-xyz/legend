@@ -469,8 +469,12 @@ void main() {
   float fray = mix(frayOf(aFrayA), frayOf(aFrayB), aT);
   vAlpha = age < 0.0 ? 0.0 : uLineAlpha * smoothstep(0.0, 1.5, age) * (1.0 - fray * 0.7) * (1.0 - uEcho * 0.7);
   // Veins: trunks carry more light than capillaries, and each beat sends a pulse out from the heart.
-  float pulse = pow(max(0.0, sin((T * uBeatRate - aDist * 0.7) * 6.2831853)), uPulseSharp);
-  vAlpha *= mix(1.0, (0.15 + 0.85 * aFlow) * (1.0 + pulse * uVeinPulse * 3.0), uVein);
+  // Only for veins: other lines leave these uniforms at 0, and pow(0, 0) is NaN on some GPUs, which
+  // blacked out the whole frame through the bloom.
+  if (uVein > 0.5) {
+    float pulse = pow(max(1e-4, sin((T * uBeatRate - aDist * 0.7) * 6.2831853)), max(uPulseSharp, 1.0));
+    vAlpha *= (0.15 + 0.85 * aFlow) * (1.0 + pulse * uVeinPulse * 3.0);
+  }
 }
 `;
 
