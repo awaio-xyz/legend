@@ -25,8 +25,10 @@ The desktop app needs [Rust](https://rustup.rs) and the Tauri prerequisites for 
 - **Bottom left:** settings (Figure, Colour, Light, Effects, Privacy, presets), randomise, stats
   (what your Legend is made of), timeline (your Legend over time, with time travel) and the folder
   (your Legend, recent vaults, or open any folder).
-- **Bottom right:** generate a video (a 10 second MP4, shot by a director that plans one to four
-  camera moves and cues the figure, meditative or trailer energy, different every time), generate
+- **Bottom right:** generate a video (a 10 second MP4 up to 4K, shot by a director that plans one
+  to four camera moves and directs the figure's own performance: meditative or trailer energy,
+  matched action across the cuts or a new take each shot, cross-fades or hard cuts, different every
+  time), generate
   imagery (ten stills for sharing, in a ratio from 9:16 to cinemascope and through a wide, long,
   fisheye or mixed lens) and Experiment (a simulated person to
   explore, which never touches your own Legend).

@@ -85,6 +85,24 @@ export class WalkController {
 
   constructor(private seed: string) {}
 
+  /** The video director's act: take this route now and hold it, whatever the journey had planned. */
+  perform(route: Route) {
+    if (this.route === route) return;
+    this.route = route;
+    this.until = Infinity;
+    if (route === "circle") this.angle = Math.atan2(this.s.z, this.s.x) || 0;
+    if (route === "pace") this.paceDir = this.s.x > 0 ? -1 : 1;
+  }
+
+  /** Everything the walker remembers, so a video render can leave the live figure where it was. */
+  snapshot() {
+    return { s: { ...this.s }, gait: this.gait, mood: this.mood, route: this.route, until: this.until, legs: this.legs, angle: this.angle, paceDir: this.paceDir, turning: this.turning, pauseUntil: this.pauseUntil };
+  }
+  restore(k: ReturnType<WalkController["snapshot"]>) {
+    this.s = { ...k.s };
+    Object.assign(this, { gait: k.gait, mood: k.mood, route: k.route, until: k.until, legs: k.legs, angle: k.angle, paceDir: k.paceDir, turning: k.turning, pauseUntil: k.pauseUntil });
+  }
+
   reset() {
     this.s = { weight: 0, phase: 0, stride: 0.35, x: 0, z: 0, heading: 0, air: 0, bob: 1, swing: 1, gait: "easy" };
     this.gait = GAITS[0];

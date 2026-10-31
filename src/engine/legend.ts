@@ -18,7 +18,8 @@ import { applyEffects, createGradePass, DEFAULT_EFFECTS, EFFECTS, type Effects }
 import { ASCII_ATLAS, ASCII_RAMP, createAsciiAtlas } from "./atlas";
 import { hash01 } from "./rng";
 import { Choreographer, isAirPose, reachTo, standingMoves, stillPose, type Idle, type Landing, type Mood, type Pose } from "./idle";
-import { planClip, shotFrame, videoSize, type Cue, type Energy } from "./director";
+import { planClip, shotFrame, videoSize, type Continuity, type Cue, type Energy, type Resolution, type Transition } from "./director";
+import type { Route } from "./walk";
 import { pickLens, RATIOS, SHOTS, throughLens, type Lens, type Ratio } from "./imagery";
 import { growVeins, type Veins } from "./veins";
 import { DEFAULT_LOOK } from "./defaultLook";
@@ -260,6 +261,7 @@ export class LegendEngine {
   // A video render sets the time itself, a frame at a time; otherwise it's the clock.
   private virtualTime: number | null = null;
   private filming = false; // the video director owns the camera
+  private act: Route | null = null; // and, while filming, what the body does
   private now() {
     return this.virtualTime ?? this.clock.getElapsedTime();
   }
@@ -1529,29 +1531,43 @@ export class LegendEngine {
   }
 
   /**
-   * Video: a ten-second clip (director.ts plans the shots and cues), rendered frame by frame at a
-   * fixed 30 fps so it's smooth on any machine, and encoded to MP4 with the browser's own encoder.
-   * The figure keeps living through it: walking, breathing, beating, answering its cues. The live
-   * view pauses meanwhile and comes back as it was.
+   * Video: a ten-second clip (director.ts plans the shots and the performance), rendered frame by
+   * frame at a fixed 30 fps so it's smooth on any machine, and encoded to MP4 with the browser's own
+   * encoder. The figure performs what the director asks: an act for the body (stand, pace, wander,
+   * circle, levitate) and cued gestures, while it keeps breathing and beating. Matched action keeps
+   * one continuous performance across the cuts; a new take each shot gives every shot its own moment.
+   * The live view pauses meanwhile and comes back exactly as it was.
    */
-  async captureVideo(o: { ratio: Ratio; lens: Lens; energy: Energy; seconds?: number; onProgress?: (done: number, total: number) => void }): Promise<Blob> {
+  async captureVideo(o: {
+    ratio: Ratio;
+    lens: Lens;
+    energy: Energy;
+    continuity: Continuity;
+    transition: Transition;
+    resolution: Resolution;
+    seconds?: number;
+    onProgress?: (done: number, total: number) => void;
+  }): Promise<Blob> {
     const { BufferTarget, CanvasSource, getFirstEncodableVideoCodec, Mp4OutputFormat, Output } = await import("mediabunny");
     const fps = 30, seconds = o.seconds ?? 10, total = fps * seconds;
-    const { width, height } = videoSize(o.ratio);
+    const { width, height } = videoSize(o.ratio, o.resolution);
     const codec = await getFirstEncodableVideoCodec(["avc", "vp9", "av1"], { width, height });
-    if (!codec) throw new Error("This system can't encode video.");
+    if (!codec) throw new Error(`This system can't encode ${width}×${height} video. Try a lower resolution.`);
     const body = this.style.body.mode === "body";
-    const plan = planClip(o.energy, seconds, o.lens, standingMoves(), body);
+    const plan = planClip({ energy: o.energy, continuity: o.continuity, seconds, lens: o.lens, moves: standingMoves(), body });
+    const { shots } = plan;
 
     // Frames are copied to a plain canvas straight after drawing: the WebGL one can't be read later.
+    // A cross-fade draws the incoming shot over the outgoing one there.
     const frame = document.createElement("canvas");
     frame.width = width;
     frame.height = height;
     const ctx = frame.getContext("2d")!;
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: "in-memory" }), target: new BufferTarget() });
-    // A fixed bitrate (about 11 Mbps at 1080p): left to a quality target, film grain and drifting
-    // points, which barely compress, ran a clip past 100 MB.
-    const source = new CanvasSource(frame, { codec, bitrate: Math.round(width * height * fps * 0.18) });
+    // A fixed bitrate, about 11 Mbps at 1080p and a little leaner per pixel above it: left to a
+    // quality target, film grain and drifting points, which barely compress, ran past 100 MB.
+    const bpp = 0.18 * Math.min(1, ((1920 * 1080) / (width * height)) ** 0.25);
+    const source = new CanvasSource(frame, { codec, bitrate: Math.round(width * height * fps * bpp) });
     output.addVideoTrack(source, { frameRate: fps });
     await output.start();
 
@@ -1563,6 +1579,11 @@ export class LegendEngine {
       fov: this.camera.fov,
       fisheye: this.grade.uniforms.fisheye.value as number,
       pixelRatio: this.renderer.getPixelRatio(),
+      walker: this.walker.snapshot(),
+      choreo: this.choreographer.snapshot(),
+      lastTick: this.lastTick,
+      lastFloat: this.lastFloat,
+      walkBase: { ...this.walkBase },
     };
     const t0 = this.now();
     this.filming = true;
@@ -1577,41 +1598,55 @@ export class LegendEngine {
       const fired = new Set<Cue>();
       // Each shot is framed from where the figure stood and faced when it began; a static shot
       // stays put there, so a walk crosses the frame.
-      let anchorShot = -1;
-      const anchor = new THREE.Vector3();
-      let heading = 0;
+      const anchors = new Map<number, { at: THREE.Vector3; heading: number }>();
+      const FADE = 0.6; // seconds a cross-fade takes, centred on the cut
+      const shotAt = (local: number) => Math.max(0, shots.findIndex((s) => local < s.end));
+      const smooth = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+
       for (let i = 0; i < total; i++) {
         const local = i / fps;
-        const t = t0 + local;
-        this.virtualTime = t;
-        const k = Math.max(0, plan.findIndex((s) => local < s.end));
-        const shot = plan[k];
-        if (shot.cue && !fired.has(shot.cue) && local >= shot.cue.at) {
-          fired.add(shot.cue);
-          this.playCue(shot.cue, t);
-        }
-        this.update(t);
+        // The shots in this frame: one, or two during a cross-fade (the incoming one on top).
+        let layers: { k: number; alpha: number }[] = [{ k: shotAt(local), alpha: 1 }];
+        if (o.transition === "fade")
+          for (let j = 1; j < shots.length; j++) {
+            const into = (local - (shots[j].start - FADE / 2)) / FADE;
+            if (into > 0 && into < 1) layers = [{ k: j - 1, alpha: 1 }, { k: j, alpha: smooth(into) }];
+          }
 
-        if (k !== anchorShot) {
-          anchorShot = k;
-          anchor.copy(this.body.position);
-          heading = this.body.rotation.y;
-        }
-        const follow = shot.kind === "static" ? anchor : this.body.position;
-        const f = shotFrame(shot, (local - shot.start) / (shot.end - shot.start), body);
-        const toWorld = (p: [number, number, number]) => new THREE.Vector3(...p).applyAxisAngle(new THREE.Vector3(0, 1, 0), heading).add(new THREE.Vector3(follow.x, follow.y, follow.z));
-        const target = toWorld(f.target);
-        this.camera.position.copy(toWorld(f.position));
-        this.camera.up.set(Math.sin(f.roll), Math.cos(f.roll), 0);
-        this.camera.fov = f.fov;
-        this.camera.aspect = width / height;
-        this.camera.updateProjectionMatrix();
-        this.camera.lookAt(target);
-        this.grade.uniforms.fisheye.value = f.fisheye;
-        this.shared.uViewScale.value = viewScale * f.pointScale;
+        for (const [n, { k, alpha }] of layers.entries()) {
+          const shot = shots[k];
+          const take = shot.take;
+          const t = t0 + local + (take?.offset ?? 0);
+          this.virtualTime = t;
+          // The performance: the body's act now, and any cue that's due.
+          this.act = take ? take.route : (plan.acts.find((a) => local < a.end) ?? plan.acts[plan.acts.length - 1]).route;
+          const due = take ? take.cues.filter((c) => local - shot.start >= c.at) : plan.cues.filter((c) => local >= c.at);
+          for (const c of due)
+            if (!fired.has(c)) {
+              fired.add(c);
+              this.playCue(c, t);
+            }
+          this.update(t);
 
-        this.composer.render();
-        ctx.drawImage(this.renderer.domElement, 0, 0, width, height);
+          if (!anchors.has(k)) anchors.set(k, { at: this.body.position.clone(), heading: this.body.rotation.y });
+          const { at, heading } = anchors.get(k)!;
+          const follow = shot.kind === "static" ? at : this.body.position;
+          const f = shotFrame(shot, (local - shot.start) / (shot.end - shot.start), body);
+          const toWorld = (p: [number, number, number]) => new THREE.Vector3(...p).applyAxisAngle(new THREE.Vector3(0, 1, 0), heading).add(follow);
+          this.camera.position.copy(toWorld(f.position));
+          this.camera.up.set(Math.sin(f.roll), Math.cos(f.roll), 0);
+          this.camera.fov = f.fov;
+          this.camera.aspect = width / height;
+          this.camera.updateProjectionMatrix();
+          this.camera.lookAt(toWorld(f.target));
+          this.grade.uniforms.fisheye.value = f.fisheye;
+          this.shared.uViewScale.value = viewScale * f.pointScale;
+
+          this.composer.render();
+          ctx.globalAlpha = n === 0 ? 1 : alpha;
+          ctx.drawImage(this.renderer.domElement, 0, 0, width, height);
+        }
+        ctx.globalAlpha = 1;
         await source.add(local, 1 / fps);
         o.onProgress?.(i + 1, total);
       }
@@ -1621,6 +1656,12 @@ export class LegendEngine {
     } finally {
       this.virtualTime = null;
       this.filming = false;
+      this.act = null;
+      this.walker.restore(saved.walker);
+      this.choreographer.restore(saved.choreo);
+      this.lastTick = saved.lastTick;
+      this.lastFloat = saved.lastFloat;
+      this.walkBase = saved.walkBase;
       this.renderer.setPixelRatio(saved.pixelRatio);
       this.camera.position.copy(saved.position);
       this.controls.target.copy(saved.target);
@@ -1647,12 +1688,15 @@ export class LegendEngine {
 
   /** Body mode: step the walk, move the figure through the space, and let the camera follow. */
   private animateWalk(t: number) {
-    const dt = Math.min(0.1, t - this.lastTick);
+    const dt = Math.max(0, Math.min(0.1, t - this.lastTick)); // a new take can jump the clock back
     this.lastTick = t;
     const human = this.humanness();
     // In body mode the figure always has a journey: standing, walking, levitating, chosen by mood.
-    const walking = this.style.body.mode === "body" && human > 0.5;
-    const w = this.walker.step(dt, t, walking, false, this.mood);
+    // While filming, the director's act decides; otherwise the journey does.
+    const act = this.filming ? this.act : null;
+    if (act && act !== "stand" && act !== "levitate") this.walker.perform(act);
+    const walking = this.style.body.mode === "body" && human > 0.5 && (!act || (act !== "stand" && act !== "levitate"));
+    const w = this.walker.step(dt, t, walking, act === "levitate", this.mood);
     this.walkAir = this.style.body.mode === "body" ? w.air : 0;
     const u = this.shared;
     u.uWalk.value = w.weight * human;

@@ -1,10 +1,10 @@
-// Video: the film button in the lower right, next to imagery. Asks first (ratio, lens and energy),
-// then for a folder, then renders a ten-second clip of the figure (engine/director.ts plans the
+// Video: the film button in the lower right, next to imagery. Asks first (ratio, resolution, lens,
+// energy, continuity and transitions), then for a folder, then renders a ten-second clip of the figure (engine/director.ts plans the
 // shots) and saves it there as an MP4.
 import { useEffect, useRef, useState } from "react";
 import type { LegendEngine } from "../engine/legend";
 import { LENSES, RATIOS, type Lens } from "../engine/imagery";
-import { videoSize, type Energy } from "../engine/director";
+import { RESOLUTIONS, videoSize, type Continuity, type Energy, type Resolution, type Transition } from "../engine/director";
 import { chooseFolder } from "./Imagery";
 
 type Stage = { kind: "ask" } | { kind: "working"; done: number; total: number } | { kind: "done"; message: string };
@@ -15,8 +15,24 @@ const ENERGIES: [Energy, string][] = [
   ["meditative", "meditative"],
   ["trailer", "trailer"],
 ];
-const readPrefs = (): { ratio: string; lens: Lens; energy: Energy } => {
-  const base = { ratio: "16:9", lens: "mixed" as Lens, energy: "either" as Energy };
+const CONTINUITY: [Continuity, string][] = [
+  ["matched", "matched action"],
+  ["fresh", "new take each shot"],
+];
+const TRANSITIONS: [Transition, string][] = [
+  ["fade", "cross-fade"],
+  ["cut", "hard cut"],
+];
+interface Prefs {
+  ratio: string;
+  resolution: Resolution;
+  lens: Lens;
+  energy: Energy;
+  continuity: Continuity;
+  transition: Transition;
+}
+const readPrefs = (): Prefs => {
+  const base: Prefs = { ratio: "16:9", resolution: "1440p", lens: "mixed", energy: "either", continuity: "matched", transition: "fade" };
   try {
     return { ...base, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") };
   } catch {
@@ -39,12 +55,27 @@ const blobToDataUrl = (blob: Blob) =>
     reader.readAsDataURL(blob);
   });
 
+function Choice<T extends string>(p: { label: string; value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <label className="imagery-opt">
+      <span>{p.label}</span>
+      <select value={p.value} onChange={(ev) => p.onChange(ev.target.value as T)}>
+        {p.options.map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function Video({ engine }: { engine: () => LegendEngine | null }) {
   const [stage, setStage] = useState<Stage | null>(null);
   const [prefs, setPrefs] = useState(readPrefs);
   const box = useRef<HTMLDivElement>(null);
   const ratio = RATIOS.find((r) => r.id === prefs.ratio) ?? RATIOS[0];
-  const size = videoSize(ratio);
+  const size = videoSize(ratio, prefs.resolution);
   const choose = (patch: Partial<typeof prefs>) =>
     setPrefs((p) => {
       const next = { ...p, ...patch };
@@ -72,7 +103,7 @@ export function Video({ engine }: { engine: () => LegendEngine | null }) {
       const folder = await chooseFolder();
       if (!folder) return setStage(null);
       setStage({ kind: "working", done: 0, total: 1 });
-      const clip = await e.captureVideo({ ratio, lens: prefs.lens, energy: prefs.energy, onProgress: (done, total) => setStage({ kind: "working", done, total }) });
+      const clip = await e.captureVideo({ ...prefs, ratio, onProgress: (done, total) => setStage({ kind: "working", done, total }) });
       const d = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
       const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
@@ -106,6 +137,7 @@ export function Video({ engine }: { engine: () => LegendEngine | null }) {
                   ))}
                 </select>
               </label>
+              <Choice label="resolution" value={prefs.resolution} options={RESOLUTIONS} onChange={(v) => choose({ resolution: v })} />
               <label className="imagery-opt">
                 <span>lens</span>
                 <select value={prefs.lens} onChange={(ev) => choose({ lens: ev.target.value as Lens })}>
@@ -126,6 +158,8 @@ export function Video({ engine }: { engine: () => LegendEngine | null }) {
                   ))}
                 </select>
               </label>
+              <Choice label="continuity" value={prefs.continuity} options={CONTINUITY} onChange={(v) => choose({ continuity: v })} />
+              <Choice label="cuts" value={prefs.transition} options={TRANSITIONS} onChange={(v) => choose({ transition: v })} />
               <div className="confirm-buttons">
                 <button onClick={generate}>Yes</button>
                 <button onClick={() => setStage(null)}>No</button>

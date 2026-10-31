@@ -704,6 +704,14 @@ export class Choreographer {
     this.cursor = 0;
   }
 
+  /** The whole plan, so a video render can leave the live figure's choreography as it was. */
+  snapshot() {
+    return { hour: this.hour, idle: this.idle, mode: this.mode, beats: [...this.beats], cursor: this.cursor, last: this.last, mood: this.mood, current: this.current };
+  }
+  restore(k: ReturnType<Choreographer["snapshot"]>) {
+    Object.assign(this, { ...k, beats: [...k.beats] });
+  }
+
   /** The planned pose at a local time, without micro-motion. */
   private poseAt(local: number): Pose {
     const beat = this.beats.find((b) => local < b.end) ?? this.beats[this.beats.length - 1];
