@@ -481,6 +481,18 @@ const AIR_MOVES: Move[] = [
     turn: [2.5, 3.5],
     weight: W(1.5, 1, 1.2, 1.2),
   },
+  {
+    name: "seated in thought",
+    region: 0,
+    // Sitting on nothing, knees together: one hand to the chin, the other forearm across the lap.
+    pose: (r) => {
+      const s = side(r);
+      return { ...leg(1, { flex: 1.3, abd: 0.06, knee: 1.5 }), ...leg(-1, { flex: 1.3, abd: 0.06, knee: 1.5 }), ...arm(s, { flex: 1.2, elbow: 2.4, inward: 0.35 }), ...arm(-s, { flex: 0.45, elbow: 1.2, inward: 0.3 }), pitch: 0.15, yaw: s * 0.08, point: 0.4 };
+    },
+    hold: [10, 20],
+    turn: [3, 4],
+    weight: W(0.9, 0.8, 1.8, 0.5),
+  },
 ];
 // Regions for the original air moves.
 Object.assign(REGION_OF, { hover: 2, "balance on the air": 2, "legs apart": 2, "arms wide": 3, "arms above": 3, "hands at heart": 1, "floating lotus": 0 });
