@@ -25,7 +25,8 @@ The desktop app needs [Rust](https://rustup.rs) and the Tauri prerequisites for 
 - **Bottom left:** settings (Figure, Colour, Light, Effects, Privacy, presets), randomise, stats
   (what your Legend is made of), timeline (your Legend over time, with time travel) and the folder
   (your Legend, recent vaults, or open any folder).
-- **Bottom right:** generate imagery (ten stills for sharing) and Experiment (a simulated person to
+- **Bottom right:** generate imagery (ten stills for sharing, in a ratio from 9:16 to cinemascope and
+  through a wide, long, fisheye or mixed lens) and Experiment (a simulated person to
   explore, which never touches your own Legend).
 - **Top:** hide the interface (or **H**), undo and redo (**Ctrl+Z** / **Ctrl+Y**).
 - **The widget** (desktop app): a small frameless window that floats above every other window and

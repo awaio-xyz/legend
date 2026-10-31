@@ -25,4 +25,53 @@ export const SHOTS: Shot[] = [
   { name: "fisheye-heart", pose: "cradle", azimuth: 0, elevation: 0.1, distance: 1.6, fov: 60, lookY: 0.15, fisheye: 0.8 },
 ];
 
-export const IMAGE_SIZE = { width: 1600, height: 2000 }; // 4:5, at home on most feeds
+export interface Ratio {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+}
+export const RATIOS: Ratio[] = [
+  { id: "4:5", label: "4:5 feed", width: 1600, height: 2000 },
+  { id: "9:16", label: "9:16 story", width: 1440, height: 2560 },
+  { id: "1:1", label: "1:1 square", width: 2000, height: 2000 },
+  { id: "16:9", label: "16:9 wide", width: 2560, height: 1440 },
+  { id: "2.39:1", label: "2.39:1 cinemascope", width: 2868, height: 1200 },
+];
+
+// A lens over every shot. Each keeps the figure about the size it was in frame, so a wide lens has
+// to come in close, which foreshortens (near limbs loom, far ones shrink), and a long lens stands
+// well back, which flattens the figure against its aura. Mixed gives each shot a lens of its own.
+export type Lens = "mixed" | "as-shot" | "wide" | "long" | "fisheye";
+export const LENSES: [Lens, string][] = [
+  ["mixed", "mixed"],
+  ["as-shot", "as shot"],
+  ["wide", "wide, foreshortened"],
+  ["long", "long, compressed"],
+  ["fisheye", "fisheye"],
+];
+const LENS_FOV = { wide: 80, long: 13, fisheye: 76 };
+
+/** The shot through a lens, and how far the camera moved (new distance over old), which the points' size must follow. */
+export function throughLens(shot: Shot, lens: Exclude<Lens, "mixed">): { shot: Shot; pointScale: number } {
+  if (lens === "as-shot") return { shot, pointScale: 1 };
+  const fov = LENS_FOV[lens];
+  const keep = Math.tan((shot.fov * Math.PI) / 360) / Math.tan((fov * Math.PI) / 360);
+  const distance = Math.max(lens === "long" ? 0 : 0.8, shot.distance * keep);
+  return {
+    shot: {
+      ...shot,
+      name: `${shot.name}-${lens}`,
+      fov,
+      distance,
+      // Close in, the angle is the drama: a wide lens leans further into the shot's height.
+      elevation: lens === "wide" ? shot.elevation * 1.4 : shot.elevation,
+      fisheye: lens === "fisheye" ? 0.85 : 0,
+    },
+    pointScale: distance / shot.distance,
+  };
+}
+
+/** Mixed: a lens for each shot, different every time. */
+export const pickLens = (lens: Lens): Exclude<Lens, "mixed"> =>
+  lens !== "mixed" ? lens : (["as-shot", "wide", "wide", "long", "fisheye"] as const)[Math.floor(Math.random() * 5)];

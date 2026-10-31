@@ -1,13 +1,22 @@
-// Imagery: the camera button in the lower right. Asks first, then for a folder, then renders ten
-// stills of the figure (different angles, lenses and poses, from engine/imagery.ts) and saves them
-// there as JPEGs, ready to share.
+// Imagery: the camera button in the lower right. Asks first (with a ratio and a lens), then for a
+// folder, then renders ten stills of the figure (different angles, lenses and poses, from
+// engine/imagery.ts) and saves them there as JPEGs, ready to share.
 import { useEffect, useRef, useState } from "react";
 import type { LegendEngine } from "../engine/legend";
-import { SHOTS, IMAGE_SIZE } from "../engine/imagery";
+import { LENSES, RATIOS, SHOTS, type Lens } from "../engine/imagery";
 import { inDesktop } from "./desktop";
 import { invoke } from "@tauri-apps/api/core";
 
 type Stage = { kind: "ask" } | { kind: "working"; done: number } | { kind: "done"; message: string };
+
+const PREFS_KEY = "legend.imagery";
+const readPrefs = (): { ratio: string; lens: Lens } => {
+  try {
+    return { ratio: RATIOS[0].id, lens: "mixed", ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") };
+  } catch {
+    return { ratio: RATIOS[0].id, lens: "mixed" };
+  }
+};
 
 // The browser's folder picker, writable this time.
 interface WritableDir {
@@ -51,7 +60,19 @@ const Camera = () => (
 
 export function Imagery({ engine }: { engine: () => LegendEngine | null }) {
   const [stage, setStage] = useState<Stage | null>(null);
+  const [prefs, setPrefs] = useState(readPrefs);
   const box = useRef<HTMLDivElement>(null);
+  const ratio = RATIOS.find((r) => r.id === prefs.ratio) ?? RATIOS[0];
+  const choose = (patch: Partial<typeof prefs>) =>
+    setPrefs((p) => {
+      const next = { ...p, ...patch };
+      try {
+        localStorage.setItem(PREFS_KEY, JSON.stringify(next));
+      } catch {
+        /* it just won't remember */
+      }
+      return next;
+    });
 
   // A click elsewhere closes the question (not a render in progress).
   useEffect(() => {
@@ -69,7 +90,7 @@ export function Imagery({ engine }: { engine: () => LegendEngine | null }) {
       const folder = await chooseFolder();
       if (!folder) return setStage(null);
       setStage({ kind: "working", done: 0 });
-      const images = await e.captureImagery((done) => setStage({ kind: "working", done }));
+      const images = await e.captureImagery((done) => setStage({ kind: "working", done }), ratio, prefs.lens);
       const d = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
       const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
@@ -91,8 +112,28 @@ export function Imagery({ engine }: { engine: () => LegendEngine | null }) {
             <>
               <b>Generate imagery?</b>
               <span className="muted">
-                {SHOTS.length} stills of your Legend from different angles, lenses and poses, {IMAGE_SIZE.width}×{IMAGE_SIZE.height} JPEG, saved to a folder you choose.
+                {SHOTS.length} stills of your Legend from different angles and poses, {ratio.width}×{ratio.height} JPEG, saved to a folder you choose.
               </span>
+              <label className="imagery-opt">
+                <span>ratio</span>
+                <select value={ratio.id} onChange={(ev) => choose({ ratio: ev.target.value })}>
+                  {RATIOS.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="imagery-opt">
+                <span>lens</span>
+                <select value={prefs.lens} onChange={(ev) => choose({ lens: ev.target.value as Lens })}>
+                  {LENSES.map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="confirm-buttons">
                 <button onClick={generate}>Yes</button>
                 <button onClick={() => setStage(null)}>No</button>

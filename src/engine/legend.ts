@@ -18,7 +18,7 @@ import { applyEffects, createGradePass, DEFAULT_EFFECTS, EFFECTS, type Effects }
 import { ASCII_ATLAS, ASCII_RAMP, createAsciiAtlas } from "./atlas";
 import { hash01 } from "./rng";
 import { Choreographer, isAirPose, stillPose, type Idle, type Landing, type Mood, type Pose } from "./idle";
-import { IMAGE_SIZE, SHOTS } from "./imagery";
+import { pickLens, RATIOS, SHOTS, throughLens, type Lens, type Ratio } from "./imagery";
 import { DEFAULT_LOOK } from "./defaultLook";
 
 export type { Idle };
@@ -1348,10 +1348,11 @@ export class LegendEngine {
   }
 
   /**
-   * Imagery: render the ten shots (imagery.ts) off-screen at full size, each pose held still, and
-   * hand back JPEGs. The live view pauses meanwhile and comes back exactly as it was.
+   * Imagery: render the ten shots (imagery.ts) off-screen at full size, in the chosen ratio and
+   * through the chosen lens, each pose held still, and hand back JPEGs. The live view pauses
+   * meanwhile and comes back exactly as it was.
    */
-  async captureImagery(onProgress?: (done: number) => void): Promise<{ name: string; dataUrl: string }[]> {
+  async captureImagery(onProgress?: (done: number) => void, ratio: Ratio = RATIOS[0], lens: Lens = "as-shot"): Promise<{ name: string; dataUrl: string }[]> {
     this.renderer.setAnimationLoop(null);
     const saved = {
       position: this.camera.position.clone(),
@@ -1365,7 +1366,7 @@ export class LegendEngine {
       walk: this.shared.uWalk.value,
       exhale: this.shared.uExhale.value,
     };
-    const { width, height } = IMAGE_SIZE;
+    const { width, height } = ratio;
     const base = new THREE.Vector3(this.body.position.x, 0, this.body.position.z);
     const out: { name: string; dataUrl: string }[] = [];
     try {
@@ -1377,8 +1378,12 @@ export class LegendEngine {
       this.shared.uWalk.value = 0;
       this.shared.uExhale.value = 0;
       // Points keep the size they have relative to the figure in the live view.
-      this.shared.uViewScale.value *= height / Math.max(1, this.host.clientHeight);
-      for (const [i, shot] of SHOTS.entries()) {
+      const viewScale = this.shared.uViewScale.value * (height / Math.max(1, this.host.clientHeight));
+      for (const [i, framed] of SHOTS.entries()) {
+        const { shot, pointScale } = throughLens(framed, pickLens(lens));
+        // Points are sized by distance alone, not the lens: scale them with the camera's move, so they
+        // keep their size on the figure.
+        this.shared.uViewScale.value = viewScale * pointScale;
         this.applyPose(stillPose(shot.pose, this.genome.seed));
         this.body.position.set(base.x, isAirPose(shot.pose) ? 0.32 : 0, base.z);
         this.body.rotation.set(0, 0, 0);
