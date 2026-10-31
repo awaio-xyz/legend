@@ -19,6 +19,7 @@ import { ASCII_ATLAS, ASCII_RAMP, createAsciiAtlas } from "./atlas";
 import { hash01 } from "./rng";
 import { Choreographer, isAirPose, stillPose, type Idle, type Landing, type Mood, type Pose } from "./idle";
 import { pickLens, RATIOS, SHOTS, throughLens, type Lens, type Ratio } from "./imagery";
+import { growVeins, type Veins } from "./veins";
 import { DEFAULT_LOOK } from "./defaultLook";
 
 export type { Idle };
@@ -56,6 +57,12 @@ export interface Style {
   wireStrength: number; // how bright the polygon's wires and facets are
   wireGlow: number; // 0 wires as faint as the nodes they join → 1 lifted out of the density dimming, bright enough to bloom
   grain: number; // 0 soft points that pool into a cloud → 1 crisp specks that shrink as the figure fills
+  veins: boolean; // a vascular tree grown from the heart through the body's own nodes (veins.ts)
+  veinBranching: number; // 0 trunks only → 1 down to capillaries
+  veinSurface: number; // 0 deep inside → 1 just under the skin as readily
+  veinAnatomy: number; // 0 the data alone routes them → 1 they hug the textbook vessels
+  veinGlow: number; // 0 as faint as the nodes they join → 1 lifted out of the density dimming
+  veinPulse: number; // light travelling out from the heart on each beat
   idle: Idle;
   auraWarp: number; // how far the aura parts around moving limbs (0 still, 1 default, 2 dramatic)
   walk: boolean; // body mode: wander the space on a journey of routes, or stand
@@ -102,6 +109,12 @@ const BASE_STYLE: Style = {
   wireStrength: 1,
   wireGlow: 0,
   grain: 0,
+  veins: false,
+  veinBranching: 0.5,
+  veinSurface: 0.25,
+  veinAnatomy: 0.3,
+  veinGlow: 0.5,
+  veinPulse: 0.5,
   idle: "watchful",
   auraWarp: 1,
   walk: false,
@@ -153,6 +166,12 @@ export function randomStyle(): Style {
     wireStrength: 0.6 + r() * 1.6,
     wireGlow: r() < 0.5 ? 0 : r(),
     grain: r(),
+    veins: r() < 0.45,
+    veinBranching: r(),
+    veinSurface: r() * 0.7,
+    veinAnatomy: 0.15 + r() * 0.5,
+    veinGlow: r(),
+    veinPulse: r(),
     idle: pick(["calm", "watchful", "contemplative", "restless"] as const),
     auraWarp: 0.6 + r() * 1.2,
     walk: r() < 0.6,
@@ -281,6 +300,7 @@ export class LegendEngine {
   private echo?: THREE.Points;
   private edges?: THREE.LineSegments;
   private wires?: THREE.LineSegments;
+  private veins?: THREE.LineSegments;
   private facets?: THREE.Mesh;
   private ghost?: THREE.Points;
 
@@ -376,6 +396,9 @@ export class LegendEngine {
   };
   private edgeAlpha = { value: 0.04 };
   private wireAlpha = { value: 0.035 };
+  private veinAlpha = { value: 0.06 };
+  private veinPulse = { value: 0.5 };
+  private veinTimer?: number;
   private facetAlpha = { value: 0.012 };
 
   constructor(private host: HTMLElement, genome: Genome, style: Style, sim: SimParams) {
@@ -444,6 +467,8 @@ export class LegendEngine {
       if (style.glyphs !== prev.glyphs) this.writeGlyphs();
       if (style.edgeStyle !== prev.edgeStyle) this.buildEdges();
       if (style.polygon !== prev.polygon || style.meshScale !== prev.meshScale) this.buildPolygon();
+      const veinKeys = ["veins", "veinBranching", "veinSurface", "veinAnatomy"] as const;
+      if (veinKeys.some((k) => style[k] !== prev[k])) this.buildVeins();
     }
     if (this.ghost) this.ghost.visible = style.ghost;
     this.applyLooks();
@@ -507,6 +532,7 @@ export class LegendEngine {
     this.writeBirths();
     this.buildEdges();
     this.buildPolygon();
+    this.growVeinsSoon();
   }
 
   /** Keep adding simulated fragments, like a live conversation. */
@@ -544,7 +570,7 @@ export class LegendEngine {
     const k = this.cutoff ?? n;
     this.points?.geometry.setDrawRange(0, k);
     this.echo?.geometry.setDrawRange(0, k);
-    for (const o of [this.edges, this.wires, this.facets]) if (o) o.visible = this.cutoff === null;
+    for (const o of [this.edges, this.wires, this.facets, this.veins]) if (o) o.visible = this.cutoff === null;
     // The ether and the light as they were then.
     let ether = 0;
     const nodes = new Set<number>();
@@ -609,11 +635,12 @@ export class LegendEngine {
 
   dispose() {
     this.setLive(false);
+    window.clearTimeout(this.veinTimer);
     this.renderer.setAnimationLoop(null);
     this.resizeObserver.disconnect();
     this.controls.dispose();
     this.composer.dispose();
-    for (const o of [this.points, this.echo, this.edges, this.wires, this.facets, this.ghost]) this.removeLayer(o);
+    for (const o of [this.points, this.echo, this.edges, this.wires, this.facets, this.veins, this.ghost]) this.removeLayer(o);
     this.pointUniforms.uAtlas.value.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -644,6 +671,7 @@ export class LegendEngine {
     this.buildPoints();
     this.buildEdges();
     this.buildPolygon();
+    this.growVeinsSoon();
     if (this.cutoff !== null) this.applyCutoff();
     this.applyLooks();
   }
@@ -929,8 +957,53 @@ export class LegendEngine {
     }
   }
 
-  /** Lines between nodes, carrying both endpoints so the shader can drift them with their nodes. */
-  private lineLayer(pairs: [number, number][], curved: boolean, alpha: { value: number }, free = 0) {
+  /**
+   * The data changed: regrow the veins once it settles. Growing the tree takes a few hundred ms in
+   * a full Legend, too long to repeat for every fragment of a live conversation.
+   */
+  private growVeinsSoon() {
+    window.clearTimeout(this.veinTimer);
+    if (!this.style.veins) return this.buildVeins();
+    if (!this.veins) return this.buildVeins();
+    this.veinTimer = window.setTimeout(() => this.buildVeins(), 1500);
+  }
+
+  /** Veins (style): the vascular tree, grown from the heart through one node per body anchor. */
+  private buildVeins() {
+    window.clearTimeout(this.veinTimer);
+    this.removeLayer(this.veins);
+    this.veins = undefined;
+    const s = this.style;
+    if (!s.veins || !this.points) return;
+    const P = this.points.geometry.getAttribute("position").array as Float32Array;
+    // The ether tears a few nodes far from the body (etherSpread in the shader): a vein to one would
+    // stretch into a long hair, so the veins only run through the nodes it still holds.
+    const ether = Math.min(this.shared.uEther.value, 2);
+    const held = (i: number) => ether * (0.04 + ((this.pointSeed[i] * 7.31) % 1) ** 3 * 1.4) < 0.02;
+    const seen = new Set<number>();
+    const nodes = this.fragments.map((_, i) => i).filter((i) => {
+      const a = this.placement.anchorOf[i];
+      if (a < 0 || this.pointLayer[i] !== 0 || seen.has(a) || !held(i)) return false;
+      seen.add(a);
+      return true;
+    });
+    const { depth } = this.anchors;
+    const tree = growVeins(nodes, P, (i) => depth[this.placement.anchorOf[i]], (i) => this.pointFray[i] > 1.5, s.body, {
+      branching: s.veinBranching ?? 0.5,
+      surface: s.veinSurface ?? 0.25,
+      anatomy: s.veinAnatomy ?? 0.3,
+    });
+    if (!tree.pairs.length) return;
+    this.veins = this.lineLayer(tree.pairs, false, this.veinAlpha, 0, tree);
+    this.body.add(this.veins);
+  }
+
+  /**
+   * Lines between nodes, carrying both endpoints so the shader can drift them with their nodes.
+   * Veins also carry how much of the tree each feeds and how far from the heart each end is, and take
+   * their colour from where they run in the body, not from what was said there.
+   */
+  private lineLayer(pairs: [number, number][], curved: boolean, alpha: { value: number }, free = 0, vein?: Veins) {
     const segs = curved ? CURVE_SEGMENTS : 1;
     const g = this.points!.geometry;
     const P = g.getAttribute("position").array as Float32Array;
@@ -947,8 +1020,13 @@ export class LegendEngine {
     const aT = new Float32Array(nVerts);
     const aBirth = new Float32Array(nVerts);
     const aWeights = new Float32Array(nVerts * 4);
+    const aFlow = vein ? new Float32Array(nVerts) : undefined;
+    const aDist = vein ? new Float32Array(nVerts) : undefined;
+    const { field } = this.anchors;
+    const R = this.anchors.regions;
 
     let v = 0;
+    let pair = 0;
     const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), Q = new THREE.Vector3();
     for (const [j, i] of pairs) {
       A.fromArray(P, j * 3);
@@ -970,10 +1048,17 @@ export class LegendEngine {
           aFrayB[v] = F[i];
           aT[v] = t;
           aBirth[v] = Math.max(this.births[j], this.births[i]);
-          aWeights.set(wa.map((x, k) => (x + wb[k]) / 2), v * 4);
+          if (vein) {
+            const end = t < 0.5 ? j : i;
+            const a = this.placement.anchorOf[end];
+            aWeights.set(field.subarray(a * R, a * R + 4), v * 4);
+            aFlow![v] = vein.flow[pair];
+            aDist![v] = vein.dist.get(end) ?? 1;
+          } else aWeights.set(wa.map((x, k) => (x + wb[k]) / 2), v * 4);
           v++;
         }
       }
+      pair++;
     }
 
     const geometry = new THREE.BufferGeometry();
@@ -987,11 +1072,21 @@ export class LegendEngine {
     geometry.setAttribute("aT", new THREE.BufferAttribute(aT, 1));
     geometry.setAttribute("aBirth", new THREE.BufferAttribute(aBirth, 1));
     geometry.setAttribute("aWeights", new THREE.BufferAttribute(aWeights, 4));
+    if (aFlow && aDist) {
+      geometry.setAttribute("aFlow", new THREE.BufferAttribute(aFlow, 1));
+      geometry.setAttribute("aDist", new THREE.BufferAttribute(aDist, 1));
+    }
 
     const lines = new THREE.LineSegments(
       geometry,
       new THREE.ShaderMaterial({
-        uniforms: { ...this.shared, uLineAlpha: alpha, uLinesFree: { value: free }, uEcho: { value: 0 } },
+        uniforms: {
+          ...this.shared,
+          uLineAlpha: alpha,
+          uLinesFree: { value: free },
+          uEcho: { value: 0 },
+          ...(vein ? { uVein: { value: 1 }, uVeinPulse: this.veinPulse, uBeatRate: this.pointUniforms.uBeatRate, uPulseSharp: this.pointUniforms.uPulseSharp } : {}),
+        },
         vertexShader: LINES_VERT,
         fragmentShader: LINES_FRAG,
         transparent: true,
@@ -1157,6 +1252,8 @@ export class LegendEngine {
     // Wire glow lifts them out of the density dimming too, far enough to bloom.
     const wires = (s.wireStrength ?? 1) * (1 + 3 * (s.meshScale ?? 0)) * (1 + (s.wireGlow ?? 0) * 3 * (1 / Math.max(density, 1e-3)) ** 0.8);
     this.wireAlpha.value = 0.035 * wires;
+    this.veinAlpha.value = 0.15 * (1 + (s.veinGlow ?? 0.5) * 4 * (1 / Math.max(density, 1e-3)) ** 0.8);
+    this.veinPulse.value = s.veinPulse ?? 0.5;
     this.facetAlpha.value = 0.012 * wires;
     this.pointUniforms.uHeartbeat.value = s.heartbeat;
     this.pointUniforms.uGutFlow.value = s.gutFlow;

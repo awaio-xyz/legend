@@ -444,9 +444,15 @@ attribute float aFrayB;
 attribute float aT;
 attribute float aBirth;
 attribute vec4 aWeights;
+attribute float aFlow;      // veins: how much of the tree this feeds, 0 a capillary → 1 the aorta
+attribute float aDist;      // veins: path distance from the heart, 0–1
 
 uniform float uLineAlpha;
 uniform float uLinesFree;   // 1 for lines that don't ride the limbs (the aura's bands)
+uniform float uVein;        // 1 for veins
+uniform float uVeinPulse;
+uniform float uBeatRate;
+uniform float uPulseSharp;
 
 varying vec3 vColor;
 varying float vAlpha;
@@ -455,12 +461,16 @@ void main() {
   T = uTime - uEcho * 0.4;
   float age = T - aBirth;
   vec3 d = mix(driftOf(aPosA, aSeedA, frayOf(aFrayA)), driftOf(aPosB, aSeedB, frayOf(aFrayB)), aT);
-  vec3 moved = mix(bodyMotion(position + d, armOf(aFrayA)), position + d, uLinesFree);
+  // Each end rides its own node's motion, so a line from the body into an arm follows the arm.
+  vec3 moved = mix(bodyMotion(position + d, armOf(aT < 0.5 ? aFrayA : aFrayB)), position + d, uLinesFree);
   vec3 p = mix(etherSpread(moved, aSeedA), etherSpread(moved, aSeedB), aT);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   vColor = regionColour(aWeights) * uExposure;
   float fray = mix(frayOf(aFrayA), frayOf(aFrayB), aT);
   vAlpha = age < 0.0 ? 0.0 : uLineAlpha * smoothstep(0.0, 1.5, age) * (1.0 - fray * 0.7) * (1.0 - uEcho * 0.7);
+  // Veins: trunks carry more light than capillaries, and each beat sends a pulse out from the heart.
+  float pulse = pow(max(0.0, sin((T * uBeatRate - aDist * 0.7) * 6.2831853)), uPulseSharp);
+  vAlpha *= mix(1.0, (0.15 + 0.85 * aFlow) * (1.0 + pulse * uVeinPulse * 3.0), uVein);
 }
 `;
 

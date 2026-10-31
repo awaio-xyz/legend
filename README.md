@@ -104,6 +104,10 @@ project a prompt came from is a separate toggle, off by default. Everything stay
   levitates) is weighted by your recent mix of head, heart, gut and spirit. It turns toward new
   fragments as they land, and often answers them in place: a reach toward ones out in the aura, a
   hand to where they touched the body.
+- **Veins** (a style, in Effects) grow from the heart through the body's own nodes, along the
+  shortest, deepest paths and, as much as you like, the routes the major vessels really take. No
+  nodes in a limb yet, no veins there yet. Each beat sends light out along them, and nodes the
+  ether tears away drop out of the network.
 - **The genome** (20 genes and rare traits) is seeded from your first words and locked at birth. It
   sets temperament, not data.
 
@@ -115,6 +119,7 @@ project a prompt came from is a separate toggle, off by default. Everything stay
 | `src/engine/placement.ts` | Where each fragment lands: routes, limbs, ether, deepening |
 | `src/engine/mannequin.ts` | The body (an SDF), its anchors, organs and aura |
 | `src/engine/shaders.ts` | Points, lines, motion, breathing, heartbeat and the aura, in GLSL |
+| `src/engine/veins.ts` | The vascular tree, grown through the nodes and guided by the major vessels |
 | `src/engine/idle.ts`, `walk.ts` | The library of moves and the walking journey |
 | `src/engine/genome.ts` | The genes and rare traits |
 | `src/ui/` | The dock, panels, timeline, widget and privacy controls |

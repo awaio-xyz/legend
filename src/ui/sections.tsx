@@ -20,7 +20,7 @@ const KEYS: Record<Category, (keyof Style)[]> = {
   figure: ["body", "auraWarp", "grain"],
   colour: ["hueShift", "harmony", "colours", "colourStory", "colourBleed", "colourPurity", "variation", "auraHues", "glyphs", "glyphCycle", "asciiCycle"],
   light: ["glowMaster", "glowBalance", "organHeat", "skinGlow", "regionGlow", "exposure", "coreGlow", "heartbeat", "gutFlow", "neural", "glow", "bloomRadius", "bloomThreshold"],
-  effects: ["fx", "smear", "smearAxis", "drift", "polygon", "meshScale", "wireStrength", "wireGlow", "edgeStyle"],
+  effects: ["fx", "smear", "smearAxis", "drift", "polygon", "meshScale", "wireStrength", "wireGlow", "edgeStyle", "veins", "veinBranching", "veinSurface", "veinAnatomy", "veinGlow", "veinPulse"],
 };
 
 /** Randomise one category (or all of them), keeping the bust/body choice. */
@@ -142,12 +142,14 @@ export function LightSection({ s, set, genome }: Props) {
 }
 
 const GROUP_LABELS: Record<EffectGroup, string> = { grade: "grade", crt: "CRT", film: "film", glitch: "glitch", focus: "focus" };
-type Subsection = EffectGroup | "motion" | "lines";
+type Subsection = EffectGroup | "motion" | "lines" | "veins";
 
 /** Re-roll one subsection of Effects, leaving the rest of the look alone. */
 function randomiseSubsection(s: Style, sub: Subsection): Partial<Style> {
   const rolled = randomStyle();
   if (sub === "motion") return { smear: rolled.smear, smearAxis: rolled.smearAxis, drift: rolled.drift };
+  if (sub === "veins")
+    return { veins: rolled.veins, veinBranching: rolled.veinBranching, veinSurface: rolled.veinSurface, veinAnatomy: rolled.veinAnatomy, veinGlow: rolled.veinGlow, veinPulse: rolled.veinPulse };
   if (sub === "lines") return { polygon: rolled.polygon, meshScale: rolled.meshScale, wireStrength: rolled.wireStrength, wireGlow: rolled.wireGlow, edgeStyle: rolled.edgeStyle };
   const keys = EFFECTS.filter((e) => e.group === sub).map((e) => e.key);
   return { fx: { ...s.fx, ...Object.fromEntries(keys.map((k) => [k, rolled.fx[k]])) } };
@@ -213,6 +215,17 @@ export function EffectsSection({ s, set, genome }: Props) {
           <Slider label="mesh scale" hint="fine ↔ coarse" min={0} max={1} step={0.01} value={s.meshScale ?? 0} onChange={(v) => set({ meshScale: v })} />
           <Slider label="wire strength" hint="faint ↔ bright" min={0} max={3} step={0.01} value={s.wireStrength ?? 1} onChange={(v) => set({ wireStrength: v })} />
           <Slider label="wire glow" hint="dim ↔ blooming" min={0} max={1} step={0.01} value={s.wireGlow ?? 0} onChange={(v) => set({ wireGlow: v })} />
+        </>
+      )}
+      <Head label="veins" onRoll={roll("veins")} />
+      <Toggle label="veins" value={s.veins ?? false} onChange={(v) => set({ veins: v })} />
+      {s.veins && (
+        <>
+          <Slider label="branching" hint="trunks ↔ capillaries" min={0} max={1} step={0.01} value={s.veinBranching ?? 0.5} onChange={(v) => set({ veinBranching: v })} />
+          <Slider label="depth" hint="deep ↔ surface" min={0} max={1} step={0.01} value={s.veinSurface ?? 0.25} onChange={(v) => set({ veinSurface: v })} />
+          <Slider label="anatomy" hint="data ↔ textbook" min={0} max={1} step={0.01} value={s.veinAnatomy ?? 0.3} onChange={(v) => set({ veinAnatomy: v })} />
+          <Slider label="vein glow" hint="dim ↔ blooming" min={0} max={1} step={0.01} value={s.veinGlow ?? 0.5} onChange={(v) => set({ veinGlow: v })} />
+          <Slider label="pulse" hint="still ↔ beating" min={0} max={1} step={0.01} value={s.veinPulse ?? 0.5} onChange={(v) => set({ veinPulse: v })} />
         </>
       )}
       <Select<EdgeStyle | "genome">
