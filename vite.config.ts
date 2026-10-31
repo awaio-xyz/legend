@@ -6,7 +6,17 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Dev only: errors in the app's webview (the desktop app has no console you can see) are echoed
+    // in the terminal running `npm run tauri dev`. src/main.tsx sends them.
+    {
+      name: "legend-dev-log",
+      configureServer(server) {
+        server.ws.on("legend:log", (data: { message: string }) => server.config.logger.error(`[app] ${data.message}`, { timestamp: true }));
+      },
+    },
+  ],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
