@@ -528,6 +528,7 @@ const REACTIONS: Move[][] = [
     { name: "hand rises to the chin", pose: (r) => ({ ...arm(side(r), { flex: 1.2, elbow: 2.4, inward: 0.35 }), pitch: 0.1 }), hold: [2.5, 4], turn: [1.1, 1.5], weight: W(1, 1, 1, 1) },
     { name: "considering", pose: (r) => ({ yaw: side(r) * 0.3, pitch: -0.25 }), hold: [2, 4], turn: [1, 1.4], weight: W(1, 1, 1, 1) },
     { name: "fingertips meet", pose: () => ({ ...both({ flex: 0.85, abd: 0.08, elbow: 1.95, inward: 0.72 }) }), hold: [2.5, 4.5], turn: [1.2, 1.6], weight: W(1, 1, 1, 1) },
+    { name: "takes it in", pose: (r) => { const s = side(r); return { pitch: 0.22, roll: s * 0.1, yaw: s * 0.1, ...both({ inward: 0.15, elbow: 0.25 }) }; }, hold: [2.5, 4], turn: [1, 1.4], weight: W(1, 1, 1, 1) },
   ],
   [
     { name: "hand to heart", pose: () => ({ ...arm(1, { flex: 0.75, elbow: 1.95, inward: 0.6 }), pitch: 0.2 }), hold: [3, 5], turn: [1.1, 1.5], weight: W(1, 1, 1, 1) },
