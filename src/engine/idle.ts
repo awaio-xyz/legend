@@ -505,6 +505,17 @@ const WALK_MOVES: Move[] = [
   { name: "looking aside, walking", region: 2, pose: (r) => ({ yaw: side(r) * (0.4 + 0.25 * r()), pitch: 0.02 }), hold: [3, 7], turn: [1.5, 2.2], weight: W(0.8, 1.8, 0.5, 1.4) },
   { name: "hands behind, walking", region: 0, pose: () => ({ ...both({ flex: -0.4, elbow: 1.25, inward: 0.5 }), pitch: 0.22 }), hold: [8, 18], turn: [2, 3], weight: W(1, 0.6, 1.8, 0.5) },
   { name: "lost in thought, walking", region: 0, pose: () => ({ pitch: 0.38, ...both({ inward: 0.15, elbow: 0.3 }) }), hold: [6, 14], turn: [2, 3], weight: W(0.8, 0.4, 1.6, 0.6) },
+  {
+    name: "chin in hand, walking",
+    region: 0,
+    pose: (r) => {
+      const s = side(r);
+      return { ...arm(s, { flex: 1.2, elbow: 2.4, inward: 0.35 }), pitch: 0.2, yaw: s * 0.08 };
+    },
+    hold: [6, 14],
+    turn: [2, 3],
+    weight: W(0.8, 0.5, 1.6, 0.5),
+  },
   { name: "hand on heart, walking", region: 1, pose: () => ({ ...arm(1, { flex: 0.75, elbow: 1.95, inward: 0.6 }), pitch: 0.16 }), hold: [6, 14], turn: [2, 3], weight: W(1, 0.4, 1.4, 0.6) },
   { name: "arms open, walking", region: 1, pose: () => ({ ...both({ abd: 0.38, elbow: 0.35, inward: -0.08 }), pitch: -0.1 }), hold: [6, 12], turn: [2.5, 3.5], weight: W(1.2, 0.6, 0.8, 1) },
   {
