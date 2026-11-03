@@ -292,6 +292,18 @@ const MOVES: Move[] = [
     turn: [2.5, 3.5],
     weight: W(0.6, 0.8, 1.2, 1),
   },
+  {
+    name: "hands clasped behind",
+    region: 0,
+    // Standing still with the hands held at the small of the back, head low and a little aside: the gaze drifts slowly as it thinks.
+    pose: (r) => {
+      const s = side(r);
+      return { ...both({ flex: -0.4, elbow: 1.25, inward: 0.5 }), pitch: 0.18 + 0.06 * r(), yaw: s * 0.15, roll: s * 0.04, fidget: { keys: ["yaw"], amp: 0.08, freq: 0.3 } };
+    },
+    hold: [8, 16],
+    turn: [2.5, 3.5],
+    weight: W(1, 0.8, 1.6, 0.5),
+  },
   // The heart: open, holding, giving.
   {
     name: "cradle",
