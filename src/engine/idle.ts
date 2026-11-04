@@ -605,6 +605,19 @@ const AIMED: AimedMove[] = [
     weight: W(1.2, 0.8, 1.4, 0.6),
   },
   { name: "touches where it landed", aim: "body", pose: (r, land) => (land ? reachTo(handFor(r, land), onSkin(land), land) : {}), hold: [2.5, 4.5], turn: [1.3, 1.8], weight: W(1, 1, 1, 1) },
+  {
+    name: "rests a hand there and bows",
+    aim: "body",
+    // The palm stays on the spot through the second beat while the head lowers over it.
+    pose: (r, land) => (land ? { ...reachTo(handFor(r, land), onSkin(land), land), shoulderL: 0.05, shoulderR: 0.05 } : {}),
+    then: (r, land) => {
+      const s = handFor(r, land);
+      return { ...reachTo(s, onSkin(land), land), pitch: 0.3, yaw: 0, roll: s * 0.05 };
+    },
+    hold: [1.5, 2.5],
+    turn: [1.3, 1.7],
+    weight: W(1.2, 0.6, 1.5, 0.6),
+  },
 ];
 /** Whether an aimed move can answer this landing: nothing reaches behind the body. */
 const aimable = (m: AimedMove, land: Landing) => m.aim === (land.onBody ? "body" : "aura") && (land.onBody ? land.normal[2] > -0.3 : land.at[2] > -0.15);
