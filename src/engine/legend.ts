@@ -12,7 +12,7 @@ import { paletteFor, type EdgeStyle, type Genome, type GlyphMix, type Harmony, t
 import { DEFAULT_BODY, eggOf, elbowX, ETHER_LAYER, LEG, legHipX, sampleAnchors, shoulderX, SPACE_LAYER, torsoHalf, type Anchors, type BodyParams } from "./mannequin";
 import { WalkController } from "./walk";
 import { etherRelease, Placement } from "./placement";
-import { Simulator, simTotal, type Fragment, type SimParams } from "./fragments";
+import { bySaid, Simulator, simTotal, type Fragment, type SimParams } from "./fragments";
 import { configureSmear, createSmearPass } from "./passes";
 import { applyEffects, createGradePass, DEFAULT_EFFECTS, EFFECTS, type Effects } from "./grade";
 import { ASCII_ATLAS, ASCII_RAMP, createAsciiAtlas } from "./atlas";
@@ -491,8 +491,27 @@ export class LegendEngine {
   /** New fragments from a watched vault: they land on the figure now, with the arrival flare. */
   addFragments(fragments: Fragment[]) {
     const now = this.now();
-    for (const f of fragments) {
-      this.fragments.push({ ...f, at: f.at ?? (f.t > 1e9 ? f.t : Date.now() / 1000) });
+    const fresh = fragments.map((f) => ({ ...f, at: f.at ?? (f.t > 1e9 ? f.t : Date.now() / 1000) })).sort(bySaid);
+    const last = this.fragments[this.fragments.length - 1];
+    if (fresh.length && last && bySaid(fresh[0], last) < 0) {
+      // Said before what's already placed (a chat synced from Drive hours late): place everything
+      // again in the one order a reload uses, so the body drawn live is the body it keeps. Existing
+      // points keep their births, so nothing replays; only the new ones flare.
+      const merged = [
+        ...this.fragments.map((f, i) => ({ f, birth: this.births[i], was: i })),
+        ...fresh.map((f) => ({ f, birth: now, was: -1 })),
+      ].sort((x, y) => bySaid(x.f, y.f));
+      const moved = new Map(merged.map((m, i) => [m.was, i]));
+      this.fragments = merged.map((m) => m.f);
+      this.births = merged.map((m) => m.birth);
+      this.birthOrder = [...this.births].sort((a, b) => a - b);
+      this.pending = [...this.pending.map((i) => moved.get(i)!), ...merged.flatMap((m, i) => (m.was < 0 ? [i] : []))];
+      this.lastArrival = now;
+      this.replace();
+      return;
+    }
+    for (const f of fresh) {
+      this.fragments.push(f);
       this.placement.add(f);
       this.births.push(now);
       this.birthOrder.push(now);
@@ -505,7 +524,7 @@ export class LegendEngine {
 
   /** Draw a loaded vault's fragments instead of simulated ones, in the order they were said. */
   loadFragments(fragments: Fragment[]) {
-    const sorted = [...fragments].sort((x, y) => x.t - y.t);
+    const sorted = [...fragments].sort(bySaid);
     const N = sorted.length;
     this.fragments = sorted.map((f, i) => ({ ...f, at: f.at ?? f.t, t: this.sim.replaySeconds * (i / Math.max(N, 1)) ** 0.8 }));
     this.resetBirths();

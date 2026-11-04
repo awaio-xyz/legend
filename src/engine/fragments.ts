@@ -25,6 +25,12 @@ export interface SimParams {
   replaySeconds: number;
 }
 
+/**
+ * The one order fragments are placed in: when they were said, then id, so ties (two sessions in the
+ * same second) never fall back to the order files happened to be read in.
+ */
+export const bySaid = (a: Fragment, b: Fragment) => (a.at ?? a.t) - (b.at ?? b.t) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
 export const simTotal = (p: SimParams) => p.counts.reduce((a, b) => a + b, 0);
 
 // Topic ranges per region, so shared-topic edges mostly stay inside a region.

@@ -1,7 +1,7 @@
 // Reading a Legend vault from disk (see the README): session markdown files of fragment blocks,
 // plus genome.json for the seed. Uses the browser's folder picker (Chromium, including the Tauri
 // WebView2 shell), so no native plugin is needed yet.
-import type { Fragment } from "../engine/fragments";
+import { bySaid, type Fragment } from "../engine/fragments";
 import { hashString } from "../engine/rng";
 
 // Minimal typings for the File System Access API.
@@ -51,7 +51,7 @@ async function readVault(root: DirHandle): Promise<Vault> {
     }
   };
   await walk(root, "");
-  const fragments = sessions.flatMap(parseSession).sort((a, b) => a.t - b.t);
+  const fragments = sessions.flatMap(parseSession).sort(bySaid);
   return { name: root.name, fragments, seed, handle: root };
 }
 
@@ -98,7 +98,7 @@ export function watchVault(vault: Vault, onNew: (fragments: Fragment[]) => void,
     busy = true;
     try {
       const next = await readVault(vault.handle);
-      const fresh = next.fragments.filter((f) => !seen.has(f.id));
+      const fresh = next.fragments.filter((f) => !seen.has(f.id)); // already in bySaid order
       fresh.forEach((f) => seen.add(f.id));
       if (fresh.length && !stopped) onNew(fresh);
     } catch {

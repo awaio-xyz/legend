@@ -2,7 +2,7 @@
 // (the browser has to ask for a folder; the desktop app knows where ~/Legend lives).
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { Fragment } from "../engine/fragments";
+import { bySaid, type Fragment } from "../engine/fragments";
 import { parseSession } from "./vault";
 
 export const inDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -20,7 +20,7 @@ export interface NativeVault {
 export async function readNativeVault(path?: string): Promise<NativeVault> {
   if (!inDesktop) throw new Error("no desktop shell");
   const files = await invoke<{ path: string; seed: string | null; sessions: string[] }>("read_vault", { path: path ?? null });
-  const fragments = files.sessions.flatMap(parseSession).sort((a, b) => a.t - b.t);
+  const fragments = files.sessions.flatMap(parseSession).sort(bySaid);
   const name = files.path.split(/[\\/]/).filter(Boolean).pop() ?? "Legend";
   return { path: files.path, name, seed: files.seed, fragments };
 }
@@ -50,7 +50,7 @@ export function watchNativeVault(seen: Set<string>, onNew: (fragments: Fragment[
       known = new Map(listing.map((s) => [s.path, s.modified]));
       if (!changed.length) return;
       const texts = await invoke<string[]>("read_sessions", { paths: changed, root: path ?? null });
-      const fresh = texts.flatMap(parseSession).filter((f) => !seen.has(f.id));
+      const fresh = texts.flatMap(parseSession).filter((f) => !seen.has(f.id)).sort(bySaid);
       fresh.forEach((f) => seen.add(f.id));
       if (fresh.length && !stopped) onNew(fresh);
     } catch {

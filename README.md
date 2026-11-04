@@ -97,6 +97,8 @@ project a prompt came from is a separate toggle, off by default. Everything stay
 ## How the figure grows
 
 - **Placement** is deterministic: the same fragments in the same order always draw the same body.
+  The order is when each was said, so a fragment that syncs in late takes its place in the past,
+  live, and the body you watched grow is the body you reopen.
   Intense thoughts condense into the organs (brain, heart, gut); passing remarks form the skin and
   slowly grow the arms and legs. A full region deepens rather than spilling over: its nodes take more
   points and glow brighter.
