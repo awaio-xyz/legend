@@ -289,6 +289,7 @@ uniform float uPulseSharp;
 uniform float uFlicker;
 uniform float uLanding;     // 0 flash, 1 bloom, 2 ripple
 uniform float uNegative;    // region index rendered inverted (rare trait), -1 for none
+uniform vec2 uSpan;         // the timeline's lit stretch, in order units (empty when x > y)
 
 varying vec3 vColor;
 varying float vGlyph;
@@ -322,6 +323,8 @@ void main() {
   // Region cores glow, so the density of each mass reads as light.
   float mass = max(aCores.x, max(aCores.y, aCores.z)) * uCoreGlow;
   float flare = exp(-age * 2.5);
+  // The timeline's span: what was said then brightens and gently pulses. Only ever adds light.
+  float lit = step(uSpan.x, aOrder) * step(aOrder, uSpan.y) * (0.7 + 0.3 * sin(T * 2.4));
 
   // Peristalsis: pulses of light travel the gut in digestive order, about 12 s end to end.
   float flow = 0.0;
@@ -342,6 +345,7 @@ void main() {
               * mix(1.0, 2.2, aura)
               * (1.0 - space * 0.45)                 // space: small, like stars
               * (1.0 + aLight.y * 0.35)              // hands and feet: sparse, so a little larger
+              * (1.0 + lit * 0.35)                   // the timeline's span
               * uGrainSize;
   float flash = 2.0;
   if (uLanding < 0.5) size *= 1.0 + flare * 5.0;
@@ -388,7 +392,7 @@ void main() {
 
   float flick = 1.0 - uFlicker * fract(sin(dot(vec2(aSeed, floor(T * 10.0)), vec2(12.9898, 78.233))) * 43758.5453);
   vColor = col * (0.35 + aIntensity * 0.65) * flick * (1.0 + uExhale * 0.6) * (1.0 + beat * 1.4) * (1.0 + flow * 3.0 + spike * 4.0) * (1.0 + flare * flash)
-         * (1.0 - aFray * 0.75) * (1.0 - uEcho * 0.7) * asciiDim * (1.0 + mass * 0.7) * (1.0 - organ * 0.6) * mix(1.0, dot(aWeights.xyz, uRegionGain), organ) * uExposure
+         * (1.0 + lit * 0.9) * (1.0 - aFray * 0.75) * (1.0 - uEcho * 0.7) * asciiDim * (1.0 + mass * 0.7) * (1.0 - organ * 0.6) * mix(1.0, dot(aWeights.xyz, uRegionGain), organ) * uExposure
          * (aLight.x <= 1.0 ? 1.0 : pow(aLight.x, uStackPow) - pow(aLight.x - 1.0, uStackPow)) * (1.0 + aLight.y * 0.8)
          * mix(1.0, uSkinLift, (1.0 - organ) * (1.0 - step(0.5, aLayer)))
          // Grain shrinks the body's points: each carries the light its lost area held, so crisp isn't dim.

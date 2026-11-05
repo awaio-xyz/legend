@@ -291,6 +291,7 @@ export class LegendEngine {
   private fragments: Fragment[] = [];
   private births: number[] = [];
   private cutoff: number | null = null; // time travel: draw only the first k fragments
+  private span: [number, number] | null = null; // the timeline's lit stretch: fragments [from, to)
   // Ether releases, as the figure grows: born fragments counted in birth order, the release reached,
   // and when the last one breathed out.
   private birthOrder: number[] = [];
@@ -402,6 +403,7 @@ export class LegendEngine {
     uGrainSize: { value: 1 },
     uStackPow: { value: 0.5 },
     uSkinLift: { value: 1 },
+    uSpan: { value: new THREE.Vector2(2, -1) }, // the lit stretch, in order units; empty when off
   };
   private edgeAlpha = { value: 0.04 };
   private wireAlpha = { value: 0.035 };
@@ -614,6 +616,23 @@ export class LegendEngine {
     this.auraNodes = aura.size;
   }
 
+  /**
+   * The timeline's span: fragments [from, to) brighten and gently pulse. Light only: nothing moves,
+   * hides or dims. Points are in fragment order, so the range maps straight onto aOrder (i / (n - 1)),
+   * with half a step of margin either side so float rounding can't drop an end. null clears it.
+   */
+  setSpan(from: number | null, to = 0) {
+    this.span = from === null ? null : [Math.max(0, Math.round(from)), Math.min(this.fragments.length, Math.round(to))];
+    this.applySpan();
+  }
+
+  private applySpan() {
+    const n = this.fragments.length;
+    const u = this.pointUniforms.uSpan.value;
+    if (!this.span || n < 2 || this.span[1] <= this.span[0]) u.set(2, -1);
+    else u.set((this.span[0] - 0.5) / (n - 1), (this.span[1] - 0.5) / (n - 1));
+  }
+
   /** Every fragment's date, dominant region and whether it went to the ether, in order: the timeline. */
   timeline() {
     const n = this.fragments.length;
@@ -701,6 +720,7 @@ export class LegendEngine {
     this.buildPolygon();
     this.growVeinsSoon();
     if (this.cutoff !== null) this.applyCutoff();
+    this.applySpan();
     this.applyLooks();
   }
 

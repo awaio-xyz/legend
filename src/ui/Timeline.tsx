@@ -1,6 +1,7 @@
 // The timeline: how this Legend was said into being. Glowing lines for head, heart, gut and spirit
 // (and the ether, in grey) over time, with the ether's releases marked. Drag the playhead and the
-// figure becomes what it was on that day; play runs the whole life as a time-lapse.
+// figure becomes what it was on that day; play runs the whole life as a time-lapse. Shift-drag lights
+// a stretch of time: what was said in it brightens on the figure, and nothing else changes.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LegendEngine, Stats } from "../engine/legend";
 import { ETHER_RELEASES } from "../engine/placement";
@@ -49,6 +50,8 @@ export function Timeline({ engine, stats, onClose }: { engine: () => LegendEngin
   const [head, setHead] = useState<number | null>(null); // playhead, 0–1 across the span; null is now
   const [playing, setPlaying] = useState(false);
   const [focus, setFocus] = useState<number | null>(null); // hovering a key entry shows that line alone
+  const [span, setSpan] = useState<[number, number] | null>(null); // a lit stretch, as two dates (seconds)
+  const marking = useRef<number | null>(null); // where a shift-drag began
   const svg = useRef<SVGSVGElement>(null);
 
   // Re-read when the Legend grows (stats tick), but not while travelling.
@@ -62,8 +65,14 @@ export function Timeline({ engine, stats, onClose }: { engine: () => LegendEngin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [born, engine]);
 
-  // Leaving the timeline returns to now.
-  useEffect(() => () => engine()?.setCutoff(null), [engine]);
+  // Leaving the timeline returns to now, with nothing lit.
+  useEffect(
+    () => () => {
+      engine()?.setCutoff(null);
+      engine()?.setSpan(null);
+    },
+    [engine],
+  );
 
   const chart = useMemo(() => {
     if (!data || data.at.length < 2) return null;
@@ -103,6 +112,15 @@ export function Timeline({ engine, stats, onClose }: { engine: () => LegendEngin
     const r = svg.current!.getBoundingClientRect();
     return (clientX - r.left) / r.width;
   };
+  const timeAt = (clientX: number) => chart!.start + Math.min(1, Math.max(0, fracAt(clientX))) * chart!.span;
+
+  // The span as fragment indices: everything said between its two dates. Re-sent as the Legend grows,
+  // since a fragment that syncs in late can land inside it.
+  const lit = data && span ? [countBy(data.at, span[0]), countBy(data.at, span[1])] : null;
+  useEffect(() => {
+    engine()?.setSpan(lit ? lit[0] : null, lit ? lit[1] : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lit?.[0], lit?.[1], engine]);
 
   // The time-lapse: the whole life, start to now, in PLAY_SECONDS.
   useEffect(() => {
@@ -145,6 +163,7 @@ export function Timeline({ engine, stats, onClose }: { engine: () => LegendEngin
             onClick={() => {
               setPlaying(false);
               setHead(null);
+              setSpan(null);
               engine()?.setCutoff(null);
             }}
           >
@@ -165,14 +184,31 @@ export function Timeline({ engine, stats, onClose }: { engine: () => LegendEngin
             viewBox={`0 0 ${W} ${H}`}
             preserveAspectRatio="none"
             onPointerDown={(e) => {
-              setPlaying(false);
               e.currentTarget.setPointerCapture(e.pointerId);
+              if (e.shiftKey) {
+                // Shift-drag marks a span; the playhead stays where it is. (Shift-click would select text.)
+                e.preventDefault();
+                marking.current = timeAt(e.clientX);
+                setSpan([marking.current, marking.current]);
+                return;
+              }
+              setPlaying(false);
               goTo(fracAt(e.clientX));
             }}
             onPointerMove={(e) => {
-              if (e.buttons) goTo(fracAt(e.clientX));
+              if (!e.buttons) return;
+              if (marking.current !== null) {
+                const t = timeAt(e.clientX);
+                setSpan([Math.min(marking.current, t), Math.max(marking.current, t)]);
+              } else goTo(fracAt(e.clientX));
+            }}
+            onPointerUp={() => {
+              // A shift-click with no drag marks nothing.
+              if (marking.current !== null && span && span[1] - span[0] < chart.span * 0.002) setSpan(null);
+              marking.current = null;
             }}
           >
+            <title>Drag to travel in time · shift-drag to light a stretch of it on the figure</title>
             <defs>
               <filter id="timeline-glow" x="-5%" y="-30%" width="110%" height="160%">
                 <feGaussianBlur stdDeviation="3" result="blur" />
@@ -211,6 +247,40 @@ export function Timeline({ engine, stats, onClose }: { engine: () => LegendEngin
                 </text>
               </g>
             ))}
+            {span && lit && (
+              <g
+                className="timeline-span"
+                onPointerDown={(e) => {
+                  // Clicking the band clears it; shift-dragging over it marks a new one.
+                  if (e.shiftKey) return;
+                  e.stopPropagation();
+                  setSpan(null);
+                }}
+              >
+                <rect
+                  x={((span[0] - chart.start) / chart.span) * W}
+                  width={Math.max(1, ((span[1] - span[0]) / chart.span) * W)}
+                  y={0}
+                  height={H}
+                  fill="#fff"
+                  fillOpacity="0.08"
+                  stroke="#fff"
+                  strokeOpacity="0.25"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <text
+                  // Near the right edge the label reads leftward from the band's end, so it stays on the chart.
+                  {...((span[0] - chart.start) / chart.span > 0.6
+                    ? { x: ((span[1] - chart.start) / chart.span) * W - 4, textAnchor: "end" }
+                    : { x: ((span[0] - chart.start) / chart.span) * W + 4 })}
+                  y={H - 6}
+                  fill="#ccc"
+                  fontSize="10"
+                >
+                  {fmt(span[0], chart.withYear)} – {fmt(span[1], chart.withYear)} · {(lit[1] - lit[0]).toLocaleString()} fragments
+                </text>
+              </g>
+            )}
             <line x1={(head ?? 1) * W} x2={(head ?? 1) * W} y1={0} y2={H} stroke="#fff" strokeWidth="2" vectorEffect="non-scaling-stroke" />
           </svg>
           <div className="timeline-axis muted">
