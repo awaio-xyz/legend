@@ -567,6 +567,7 @@ const REACTIONS: Move[][] = [
     { name: "both hands to heart", pose: () => ({ ...arm(1, { flex: 0.75, elbow: 1.95, inward: 0.62 }), ...arm(-1, { flex: 0.7, elbow: 1.85, inward: 0.85 }), pitch: 0.25 }), hold: [3, 5], turn: [1.2, 1.6], weight: W(1, 1, 1, 1) },
     { name: "arms soften open", pose: () => ({ ...both({ abd: 0.4, elbow: 0.4, inward: -0.1 }), pitch: -0.1 }), hold: [2.5, 4.5], turn: [1.2, 1.6], weight: W(1, 1, 1, 1) },
     { name: "a breath in", pose: () => ({ shoulderL: 0.45, shoulderR: 0.45, pitch: -0.12, bodyPitch: -0.03 }), hold: [1.5, 2.5], turn: [1.2, 1.6], weight: W(1, 1, 1, 1) },
+    { name: "holds it close", pose: (r) => ({ ...both({ flex: 0.6, abd: 0.18, elbow: 1.45, inward: 0.5 }), pitch: 0.3, roll: side(r) * 0.06, shoulderL: 0.1, shoulderR: 0.1 }), hold: [2.5, 4.5], turn: [1.2, 1.6], weight: W(1, 1, 1, 1) },
   ],
   [
     { name: "turns toward it", pose: (r) => ({ bodyYaw: side(r) * 0.18, yaw: side(r) * 0.2 }), hold: [2, 4], turn: [1, 1.4], weight: W(1, 1, 1, 1) },
