@@ -524,6 +524,15 @@ const WALK_MOVES: Move[] = [
   { name: "easy walk", region: 2, pose: () => ({}), hold: [6, 16], turn: [1.5, 2.5], weight: W(2, 1.5, 1, 2) },
   { name: "head up, walking", region: 2, pose: (r) => ({ pitch: -0.12, yaw: (r() - 0.5) * 0.3 }), hold: [5, 12], turn: [1.5, 2.5], weight: W(1, 1.2, 0.6, 1.2) },
   { name: "looking aside, walking", region: 2, pose: (r) => ({ yaw: side(r) * (0.4 + 0.25 * r()), pitch: 0.02 }), hold: [3, 7], turn: [1.5, 2.2], weight: W(0.8, 1.8, 0.5, 1.4) },
+  {
+    name: "belly breath, walking",
+    region: 2,
+    // Both hands resting low on the belly, as in "centred": slow breaths lift the shoulders as it goes.
+    pose: () => ({ ...both({ flex: 0.25, abd: 0.05, elbow: 0.95, inward: 0.72 }), pitch: 0.16, fidget: { keys: ["shoulderL", "shoulderR"], amp: 0.06, freq: 0.35 } }),
+    hold: [8, 16],
+    turn: [2, 3],
+    weight: W(1.4, 0.6, 1.4, 0.6),
+  },
   { name: "hands behind, walking", region: 0, pose: () => ({ ...both({ flex: -0.4, elbow: 1.25, inward: 0.5 }), pitch: 0.22 }), hold: [8, 18], turn: [2, 3], weight: W(1, 0.6, 1.8, 0.5) },
   { name: "lost in thought, walking", region: 0, pose: () => ({ pitch: 0.38, ...both({ inward: 0.15, elbow: 0.3 }) }), hold: [6, 14], turn: [2, 3], weight: W(0.8, 0.4, 1.6, 0.6) },
   {
