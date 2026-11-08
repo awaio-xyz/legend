@@ -331,6 +331,15 @@ const MOVES: Move[] = [
     turn: [3.5, 5],
     weight: W(1, 0.5, 1.2, 0.8),
   },
+  {
+    name: "heart and open hand",
+    region: 1,
+    // One hand rests on the heart as in "hand over heart"; the other arm opens out low, palm up, as if giving from it.
+    pose: () => ({ ...arm(1, { flex: 0.75, elbow: 1.95, inward: 0.6 }), ...arm(-1, { flex: 0.35, abd: 0.35, elbow: 0.45, inward: -0.05 }), pitch: 0.14, roll: -0.05, fidget: { keys: ["shoulderL", "shoulderR"], amp: 0.06, freq: 0.35 } }),
+    hold: [6, 14],
+    turn: [2.5, 3.5],
+    weight: W(1.2, 0.5, 1.6, 0.6),
+  },
   // The gut: grounded, sure, present.
   { name: "grounding", region: 2, pose: () => ({ kneeL: 0.18, kneeR: 0.18, pitch: 0.14, ...both({ abd: 0.12, elbow: 0.15 }) }), hold: [6, 14], turn: [2.5, 3.5], weight: W(1.4, 0.8, 1, 1) },
   {
