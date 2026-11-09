@@ -632,6 +632,23 @@ const AIMED: AimedMove[] = [
     turn: [1.4, 1.8],
     weight: W(1.2, 0.8, 1.4, 0.6),
   },
+  {
+    name: "brushes it with fingertips",
+    aim: "aura",
+    // The palm arrives just inside and above the landing, then drifts out and down through it, the head following the hand.
+    pose: (r, land) => {
+      if (!land) return {};
+      const s = handFor(r, land);
+      return { ...reachTo(s, [land.at[0] - s * 0.05, land.at[1] + 0.03, land.at[2]], land), shoulderL: 0.05, shoulderR: 0.05, roll: s * 0.05 };
+    },
+    then: (r, land) => {
+      const s = handFor(r, land);
+      return { ...reachTo(s, [land.at[0] + s * 0.05, land.at[1] - 0.03, land.at[2]], land), yaw: s * 0.15, pitch: 0.1, roll: s * 0.05 };
+    },
+    hold: [1.5, 2.5],
+    turn: [1.2, 1.6],
+    weight: W(1.2, 0.8, 1.2, 0.8),
+  },
   { name: "touches where it landed", aim: "body", pose: (r, land) => (land ? reachTo(handFor(r, land), onSkin(land), land) : {}), hold: [2.5, 4.5], turn: [1.3, 1.8], weight: W(1, 1, 1, 1) },
   {
     name: "rests a hand there and bows",
