@@ -604,6 +604,8 @@ const REACTIONS: Move[][] = [
     { name: "settles", pose: () => ({ kneeL: 0.18, kneeR: 0.18, pitch: 0.12 }), hold: [2, 4], turn: [1, 1.4], weight: W(1, 1, 1, 1) },
     { name: "squares up", pose: () => ({ shoulderL: 0.12, shoulderR: 0.12, bodyPitch: -0.04, pitch: -0.06 }), hold: [2, 3.5], turn: [0.9, 1.3], weight: W(1, 1, 1, 1) },
     { name: "a step's weight", pose: (r) => ({ lean: side(r) * 0.016 }), hold: [2, 4], turn: [1, 1.4], weight: W(1, 1, 1, 1) },
+    // One hand drops low to the belly, as in "centred", and the head lowers with it.
+    { name: "hand to the belly", pose: (r) => ({ ...arm(side(r), { flex: 0.25, abd: 0.05, elbow: 0.95, inward: 0.72 }), pitch: 0.16, shoulderL: 0.08, shoulderR: 0.08 }), hold: [2.5, 4], turn: [1.1, 1.5], weight: W(1, 1, 1, 1) },
   ],
   [
     { name: "eyes to the sky", pose: () => ({ pitch: -0.5 }), hold: [2.5, 4.5], turn: [1.2, 1.6], weight: W(1, 1, 1, 1) },
