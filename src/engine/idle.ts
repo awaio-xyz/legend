@@ -577,6 +577,15 @@ const WALK_MOVES: Move[] = [
     turn: [2, 3],
     weight: W(1, 0.6, 0.8, 1),
   },
+  {
+    name: "cradling, walking",
+    region: 1,
+    // Both arms carry something unseen against the chest, as in "cradle": the head bows a little over it as it goes.
+    pose: (r) => ({ ...both({ flex: 0.6, abd: 0.18, elbow: 1.45, inward: 0.5 }), pitch: 0.26, roll: side(r) * 0.05 }),
+    hold: [8, 16],
+    turn: [2, 3],
+    weight: W(1.1, 0.4, 1.6, 0.5),
+  },
   { name: "processional", region: 3, pose: () => ({ ...both({ flex: 0.75, elbow: 1.75, inward: 0.62 }), pitch: 0.18 }), hold: [8, 18], turn: [2.5, 3.5], weight: W(1, 0.4, 1.6, 0.5) },
   { name: "palms up, walking", region: 3, pose: () => ({ ...both({ flex: 0.5, abd: 0.25, elbow: 1.1, inward: 0.15 }), pitch: -0.15 }), hold: [6, 12], turn: [2.5, 3.5], weight: W(0.9, 0.5, 1.2, 0.8) },
   { name: "wings low, walking", region: 3, pose: () => ({ ...both({ abd: 0.65, elbow: 0.25 }), pitch: -0.08 }), hold: [6, 12], turn: [2.5, 3.5], weight: W(0.9, 0.6, 0.8, 1.1) },
