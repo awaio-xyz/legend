@@ -389,6 +389,18 @@ const MOVES: Move[] = [
     weight: W(0.9, 0.6, 1, 1.1),
   },
   {
+    name: "heaven and earth",
+    region: 3,
+    // One arm raised toward the light as in "reach toward the light", the other open low at the side, palm turned out as in "surrender": slow breaths lift the shoulders.
+    pose: (r) => {
+      const s = side(r);
+      return { ...arm(s, { flex: 2.55 + 0.2 * r(), abd: 0.3, elbow: 0.25 }), ...arm(-s, { abd: 0.32, elbow: 0.12, inward: -0.18 }), pitch: -0.3, yaw: s * 0.1, lean: -s * 0.006, fidget: { keys: ["shoulderL", "shoulderR"], amp: 0.06, freq: 0.35 } };
+    },
+    hold: [6, 14],
+    turn: [3, 4.5],
+    weight: W(1, 0.5, 1.4, 0.8),
+  },
+  {
     name: "weight shift",
     pose: (r) => ({ lean: side(r) * (0.01 + 0.01 * r()) }),
     hold: [6, 15],
