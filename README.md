@@ -36,7 +36,8 @@ The desktop app needs [Rust](https://rustup.rs) and the Tauri prerequisites for 
   explore, which never touches your own Legend).
 - **Top:** hide the interface (or **H**), undo and redo (**Ctrl+Z** / **Ctrl+Y**).
 - **The widget** (desktop app): a small frameless window that floats above every other window and
-  shows only the figure, live. **W** shows or hides it.
+  shows only the figure, live, wearing the look and the genome of whichever Legend the app is
+  showing. **W** shows or hides it.
 
 ## Capture
 

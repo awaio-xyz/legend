@@ -51,6 +51,15 @@ export interface Genome {
 export const makeSeed = (firstWords: string, createdAt: string) => `${firstWords.trim()}|${createdAt}`;
 
 /**
+ * The stand-in for a real birth, worn by a vault with no genome.json and by the simulated person:
+ * the first words written about Legend, 2026-10-24. One export, so the app and the widget can't drift.
+ */
+export const STAND_IN_SEED = makeSeed(
+  "the nodes will always be generated in the bust shape of a human head shoulders chest and stomach",
+  "2026-10-24T12:00:00+10:00",
+);
+
+/**
  * Draw a genome. The ranges are the art direction: the seed picks inside them, so no genome can
  * come out ugly, only different (rule 1). They're tuned by eye.
  */

@@ -4,10 +4,10 @@
 // button brings the camera back to the figure and a gear opens the widget's own settings: the frame
 // (circle, or square with rounded corners), a grey ring and its thickness, a vignette, a fisheye
 // lens, zoom, and whether a drag moves the window or explores the figure. It wears whatever look
-// the full app last had.
+// the full app last had, and the genome of whichever Legend it shows.
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { drawGenome, makeSeed } from "../engine/genome";
+import { drawGenome, STAND_IN_SEED } from "../engine/genome";
 import { DEFAULT_SIM } from "../engine/fragments";
 import { DEFAULT_STYLE, LegendEngine, type Style } from "../engine/legend";
 import { quitApp, readNativeVault, showWindow, VIEW_KEY, watchNativeVault, type View } from "./desktop";
@@ -16,9 +16,6 @@ import "../App.css";
 
 const STYLE_KEY = "legend.style";
 const PREFS_KEY = "legend.widget";
-// The same stand-in the full app is born from when there's no vault yet.
-const FIRST_WORDS = "the nodes will always be generated in the bust shape of a human head shoulders chest and stomach";
-const CREATED_AT = "2026-10-24T12:00:00+10:00";
 
 interface Prefs {
   shape: "circle" | "square";
@@ -93,11 +90,18 @@ export function Widget() {
     document.documentElement.classList.add("widget-mode");
     let stop: (() => void) | undefined;
     let disposed = false;
+    // The seed the widget is wearing, so switching between Legends only rebuilds when it changes.
+    let seed = STAND_IN_SEED;
+    const wear = (e: LegendEngine, next: string | null) => {
+      if ((next ?? STAND_IN_SEED) === seed) return;
+      seed = next ?? STAND_IN_SEED;
+      e.setGenome(drawGenome(seed));
+    };
     (async () => {
       const vault = await readNativeVault().catch(() => null);
       if (disposed) return;
-      const genome = drawGenome(vault?.seed ?? makeSeed(FIRST_WORDS, CREATED_AT));
-      const e = new LegendEngine(host.current!, genome, sharedStyle(), DEFAULT_SIM);
+      seed = vault?.seed ?? STAND_IN_SEED;
+      const e = new LegendEngine(host.current!, drawGenome(seed), sharedStyle(), DEFAULT_SIM);
       const p = readPrefs();
       e.setInteractive(p.explore);
       e.setZoom(p.zoom);
@@ -119,7 +123,7 @@ export function Widget() {
       }
     })();
     // The full app's look, as it changes, and what it's showing: switch to the simulated person when
-    // the full app does, and back to your Legend when it loads it again.
+    // the full app does, or to the Legend it opens, each in its own genome.
     const onStorage = (ev: StorageEvent) => {
       if (ev.key === STYLE_KEY) engine.current?.setStyle(sharedStyle());
       if (ev.key === VIEW_KEY && ev.newValue && engine.current) {
@@ -129,11 +133,26 @@ export function Widget() {
         stop = undefined;
         if (view.kind === "sim") {
           setEmpty(false);
+          wear(e, null); // the simulated person wears the stand-in, as in the full app
           e.setSim(view.sim);
         } else {
           readNativeVault(view.path)
             .then((vault) => {
-              if (!vault.fragments.length) return;
+              wear(e, vault.seed);
+              if (!vault.fragments.length) {
+                // Nothing in it yet: keep watching, as on first load, so it fills in live.
+                stop = watchNativeVault(
+                  new Set(),
+                  (fresh) => {
+                    e.loadFragments(fresh);
+                    stop?.();
+                    stop = watchNativeVault(new Set(fresh.map((f) => f.id)), (more) => e.addFragments(more), 4000, view.path);
+                  },
+                  4000,
+                  view.path,
+                );
+                return;
+              }
               e.loadFragments(vault.fragments);
               stop = watchNativeVault(new Set(vault.fragments.map((f) => f.id)), (fresh) => e.addFragments(fresh), 4000, view.path);
             })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { drawGenome, makeSeed, type RareTrait } from "./engine/genome";
+import { drawGenome, STAND_IN_SEED, type RareTrait } from "./engine/genome";
 import { DEFAULT_STYLE, LegendEngine, type Stats, type Style } from "./engine/legend";
 import { DEFAULT_SIM, type SimParams } from "./engine/fragments";
 import { Panel } from "./ui/Panel";
@@ -13,17 +13,13 @@ import { Timeline } from "./ui/Timeline";
 import { useFlyout } from "./ui/flyout";
 import "./App.css";
 
-// The sketch's stand-in for a real birth: the first words written about Legend, 2026-10-24.
-const FIRST_WORDS = "the nodes will always be generated in the bust shape of a human head shoulders chest and stomach";
-const CREATED_AT = "2026-10-24T12:00:00+10:00";
-
 export type RarePreview = "genome" | "none" | RareTrait;
 
 export default function App() {
   const hostRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<LegendEngine | null>(null);
 
-  const firstWords = FIRST_WORDS; // the sketch's stand-in seed; a real vault brings its own
+  // A real vault brings its own seed; without one, the stand-in.
   const [vaultSeed, setVaultSeed] = useState<string | null>(null);
   const [rarePreview, setRarePreview] = useState<RarePreview>("genome");
   const [style, setStyleNow] = useState<Style>(DEFAULT_STYLE);
@@ -77,9 +73,9 @@ export default function App() {
   useEffect(() => () => stopWatch.current?.(), []);
 
   const genome = useMemo(() => {
-    const g = drawGenome(vaultSeed ?? makeSeed(firstWords, CREATED_AT));
+    const g = drawGenome(vaultSeed ?? STAND_IN_SEED);
     return rarePreview === "genome" ? g : { ...g, rare: rarePreview === "none" ? null : rarePreview };
-  }, [firstWords, vaultSeed, rarePreview]);
+  }, [vaultSeed, rarePreview]);
 
   // Mount once; later changes go through the setters below. Building the figure holds the page for
   // a moment, so it waits until the splash has drawn itself, and happens behind it.
@@ -163,7 +159,7 @@ export default function App() {
       return;
     }
     if (path) setRecent(rememberVault({ path, name: vault.name }));
-    if (vault.seed) setVaultSeed(vault.seed);
+    setVaultSeed(vault.seed); // a vault with no seed wears the stand-in, not the last one's
     engineRef.current?.loadFragments(vault.fragments);
     let count = vault.fragments.length;
     setSource(`${vault.name} · ${count.toLocaleString()}`);
@@ -197,7 +193,7 @@ export default function App() {
         window.alert(`No fragments found in "${vault.name}". A Legend vault keeps them in sessions/…/*.md.`);
         return;
       }
-      if (vault.seed) setVaultSeed(vault.seed);
+      setVaultSeed(vault.seed);
       engineRef.current?.loadFragments(vault.fragments);
       let count = vault.fragments.length;
       setSource(`${vault.name} · ${count.toLocaleString()}`);
