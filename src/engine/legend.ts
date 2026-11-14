@@ -42,6 +42,9 @@ const smooth01 = (e0: number, e1: number, x: number) => {
 };
 
 
+/** A local calendar day, as a key. */
+const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
 /** What the user may change (decision 6). `null` means "use the genome's value". */
 export interface Style {
   hueShift: number;
@@ -65,6 +68,7 @@ export interface Style {
   veinAnatomy: number; // 0 the data alone routes them → 1 they hug the textbook vessels
   veinGlow: number; // 0 as faint as the nodes they join → 1 lifted out of the density dimming
   veinPulse: number; // light travelling out from the heart on each beat
+  anniversary: boolean; // what was said on this day a year ago (a month, before it's a year old) softly lights
   idle: Idle;
   auraWarp: number; // how far the aura parts around moving limbs (0 still, 1 default, 2 dramatic)
   walk: boolean; // body mode: wander the space on a journey of routes, or stand
@@ -117,6 +121,7 @@ const BASE_STYLE: Style = {
   veinAnatomy: 0.3,
   veinGlow: 0.5,
   veinPulse: 0.5,
+  anniversary: true,
   idle: "watchful",
   auraWarp: 1,
   walk: false,
@@ -174,6 +179,7 @@ export function randomStyle(): Style {
     veinAnatomy: 0.15 + r() * 0.5,
     veinGlow: r(),
     veinPulse: r(),
+    anniversary: true,
     idle: pick(["calm", "watchful", "contemplative", "restless"] as const),
     auraWarp: 0.6 + r() * 1.2,
     walk: r() < 0.6,
@@ -292,6 +298,8 @@ export class LegendEngine {
   private births: number[] = [];
   private cutoff: number | null = null; // time travel: draw only the first k fragments
   private span: [number, number] | null = null; // the timeline's lit stretch: fragments [from, to)
+  private litDay = ""; // the local day the anniversary was last worked out for
+  private anniversaryOff = ""; // the day its light was cleared, if it was
   // Ether releases, as the figure grows: born fragments counted in birth order, the release reached,
   // and when the last one breathed out.
   private birthOrder: number[] = [];
@@ -482,6 +490,7 @@ export class LegendEngine {
       if (veinKeys.some((k) => style[k] !== prev[k])) this.buildVeins();
     }
     if (this.ghost) this.ghost.visible = style.ghost;
+    if (style.anniversary !== prev.anniversary) this.applySpan();
     this.applyLooks();
   }
 
@@ -629,8 +638,48 @@ export class LegendEngine {
   private applySpan() {
     const n = this.fragments.length;
     const u = this.pointUniforms.uSpan.value;
-    if (!this.span || n < 2 || this.span[1] <= this.span[0]) u.set(2, -1);
-    else u.set((this.span[0] - 0.5) / (n - 1), (this.span[1] - 0.5) / (n - 1));
+    this.litDay = dayKey(new Date());
+    // A stretch you light wins; with none, the anniversary lights, if there is one today.
+    const lit = this.span ?? this.anniversary();
+    if (!lit || n < 2 || lit[1] <= lit[0]) u.set(2, -1);
+    else u.set((lit[0] - 0.5) / (n - 1), (lit[1] - 0.5) / (n - 1));
+  }
+
+  /**
+   * What was said on this day a year ago, or a month ago while the Legend is under a year old, as
+   * fragments [from, to), plus which it is. Local days; 29 February a year on is the 28th, and the
+   * 31st a month on is the month's last day. null when nothing was said then, or it's turned off or
+   * cleared today. Light only, like the timeline's span.
+   */
+  anniversary(): [number, number, "year" | "month"] | null {
+    const now = new Date();
+    if (this.style.anniversary === false || this.anniversaryOff === dayKey(now) || !this.fragments.length) return null;
+    const on = (y: number, m: number) => new Date(y, m, Math.min(now.getDate(), new Date(y, m + 1, 0).getDate()));
+    const yearAgo = on(now.getFullYear() - 1, now.getMonth());
+    const born = this.fragments[0].at ?? 0;
+    const ago = born > 0 && born * 1000 < yearAgo.getTime() + 86400000 ? "year" : "month";
+    const day = ago === "year" ? yearAgo : on(now.getFullYear(), now.getMonth() - 1);
+    const start = day.getTime() / 1000;
+    const end = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime() / 1000;
+    const from = this.saidBefore(start), to = this.saidBefore(end);
+    return to > from ? [from, to, ago] : null;
+  }
+
+  /** Clear today's anniversary light. It comes back tomorrow, on another day's anniversary. */
+  clearAnniversary() {
+    this.anniversaryOff = dayKey(new Date());
+    this.applySpan();
+  }
+
+  /** How many fragments were said before t (seconds): fragments are in the order they were said. */
+  private saidBefore(t: number) {
+    let lo = 0, hi = this.fragments.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if ((this.fragments[mid].at ?? 0) < t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
   }
 
   /** Every fragment's date, dominant region and whether it went to the ether, in order: the timeline. */
@@ -1344,7 +1393,10 @@ export class LegendEngine {
     this.update(this.now());
     this.controls.update();
     this.composer.render();
-    if (++this.frame % 30 === 0) this.emitStats();
+    if (++this.frame % 30 === 0) {
+      this.emitStats();
+      if (dayKey(new Date()) !== this.litDay) this.applySpan(); // past midnight: a new day's anniversary
+    }
   }
 
   /** Everything that moves at time t, short of drawing it. */

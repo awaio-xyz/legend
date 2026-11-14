@@ -1,7 +1,9 @@
 // The timeline: how this Legend was said into being. Glowing lines for head, heart, gut and spirit
 // (and the ether, in grey) over time, with the ether's releases marked. Drag the playhead and the
 // figure becomes what it was on that day; play runs the whole life as a time-lapse. Shift-drag lights
-// a stretch of time: what was said in it brightens on the figure, and nothing else changes.
+// a stretch of time: what was said in it brightens on the figure, and nothing else changes. On the
+// day you said something a year ago (a month, before it's a year old), that day lights on its own,
+// until you light your own stretch or clear it here.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LegendEngine, Stats } from "../engine/legend";
 import { ETHER_RELEASES } from "../engine/placement";
@@ -51,6 +53,7 @@ export function Timeline({ engine, stats, onClose }: { engine: () => LegendEngin
   const [playing, setPlaying] = useState(false);
   const [focus, setFocus] = useState<number | null>(null); // hovering a key entry shows that line alone
   const [span, setSpan] = useState<[number, number] | null>(null); // a lit stretch, as two dates (seconds)
+  const [, cleared] = useState(0); // re-render once today's anniversary is cleared
   const marking = useRef<number | null>(null); // where a shift-drag began
   const svg = useRef<SVGSVGElement>(null);
 
@@ -145,6 +148,8 @@ export function Timeline({ engine, stats, onClose }: { engine: () => LegendEngin
 
   const said = data && chart && head !== null ? countBy(data.at, chart.start + head * chart.span) : data?.at.length ?? 0;
   const when = chart ? (head === null ? "now" : fmt(chart.start + head * chart.span, chart.withYear)) : "";
+  // The engine lights the anniversary whenever no stretch of yours is lit; this only names it.
+  const anniversary = span ? null : engine()?.anniversary() ?? null;
 
   return (
     <aside className="timeline">
@@ -153,6 +158,18 @@ export function Timeline({ engine, stats, onClose }: { engine: () => LegendEngin
         <span className="muted">
           {when} · {said.toLocaleString()} fragments
         </span>
+        {anniversary && (
+          <button
+            className="mini"
+            title={`What you said on this day a ${anniversary[2]} ago is lit · ${(anniversary[1] - anniversary[0]).toLocaleString()} fragments · click to clear`}
+            onClick={() => {
+              engine()?.clearAnniversary();
+              cleared((n) => n + 1);
+            }}
+          >
+            a {anniversary[2]} ago today
+          </button>
+        )}
         <span className="timeline-actions">
           <button className="mini" title={playing ? "Pause" : "Play your Legend forming"} onClick={() => setPlaying((p) => !p)}>
             {playing ? "❚❚" : "▶"}

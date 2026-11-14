@@ -23,14 +23,14 @@ const KEYS: Record<Category, (keyof Style)[]> = {
   effects: ["fx", "smear", "smearAxis", "drift", "polygon", "meshScale", "wireStrength", "wireGlow", "edgeStyle", "veins", "veinBranching", "veinSurface", "veinAnatomy", "veinGlow", "veinPulse"],
 };
 
-/** Randomise one category (or all of them), keeping the bust/body choice. */
+/** Randomise one category (or all of them), keeping the bust/body choice and the anniversary toggle. */
 export function randomise(style: Style, category?: Category): Style {
   const rolled = randomStyle();
   const keys = category ? KEYS[category] : (Object.keys(rolled) as (keyof Style)[]);
   const next = { ...style } as Record<keyof Style, unknown>;
   for (const k of keys) next[k] = rolled[k];
   const out = next as Style;
-  return { ...out, body: { ...out.body, mode: style.body.mode } };
+  return { ...out, body: { ...out.body, mode: style.body.mode }, anniversary: style.anniversary };
 }
 
 interface Props {
@@ -234,6 +234,7 @@ export function EffectsSection({ s, set, genome }: Props) {
         options={[["genome", `genome (${genome.edgeStyle === "hover" ? "off" : genome.edgeStyle})`], ["hover", "off"], ["straight", "straight"], ["curved", "curved"]]}
         onChange={(v) => set({ edgeStyle: v === "genome" ? null : v })}
       />
+      <Toggle label="anniversary" value={s.anniversary !== false} onChange={(v) => set({ anniversary: v })} />
     </>
   );
 }
