@@ -698,6 +698,19 @@ const AIMED: AimedMove[] = [
     turn: [1.3, 1.7],
     weight: W(1.2, 0.6, 1.5, 0.6),
   },
+  {
+    name: "carries it to the heart",
+    aim: "body",
+    // The palm finds the spot, then carries it to the heart: the left hand as in "hand over heart", the right as in "both hands to heart".
+    pose: (r, land) => (land ? { ...reachTo(handFor(r, land), onSkin(land), land), shoulderL: 0.05, shoulderR: 0.05 } : {}),
+    then: (r, land) => {
+      const s = handFor(r, land);
+      return { ...arm(s, s > 0 ? { flex: 0.75, elbow: 1.95, inward: 0.6 } : { flex: 0.7, elbow: 1.85, inward: 0.85 }), pitch: 0.22, yaw: 0, roll: -s * 0.05 };
+    },
+    hold: [1.5, 2.5],
+    turn: [1.3, 1.7],
+    weight: W(1.2, 0.5, 1.5, 0.6),
+  },
 ];
 /** Whether an aimed move can answer this landing: nothing reaches behind the body. */
 const aimable = (m: AimedMove, land: Landing) => m.aim === (land.onBody ? "body" : "aura") && (land.onBody ? land.normal[2] > -0.3 : land.at[2] > -0.15);
