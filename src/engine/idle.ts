@@ -547,6 +547,15 @@ const AIR_MOVES: Move[] = [
     turn: [3, 4],
     weight: W(1, 0.8, 1.6, 0.5),
   },
+  {
+    name: "heart in lotus",
+    region: 1,
+    // Seated in the air as in "floating lotus": one hand over the heart as in "hand over heart", the other resting in the lap, breathing slowly.
+    pose: () => ({ ...lotus, ...arm(1, { flex: 0.75, elbow: 1.95, inward: 0.6 }), ...arm(-1, { flex: 0.45, elbow: 1.2, inward: 0.3 }), point: 0.3, pitch: 0.16, roll: -0.05, fidget: { keys: ["shoulderL", "shoulderR"], amp: 0.06, freq: 0.35 } }),
+    hold: [12, 30],
+    turn: [3, 4.5],
+    weight: W(1.4, 0.5, 2, 0.5),
+  },
 ];
 // Regions for the original air moves.
 Object.assign(REGION_OF, { hover: 2, "balance on the air": 2, "legs apart": 2, "arms wide": 3, "arms above": 3, "hands at heart": 1, "floating lotus": 0 });
