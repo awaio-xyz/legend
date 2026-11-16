@@ -642,6 +642,8 @@ const REACTIONS: Move[][] = [
     { name: "wings lift", pose: () => ({ ...both({ abd: 0.9, elbow: 0.3 }), pitch: -0.2 }), hold: [2.5, 4.5], turn: [1.4, 1.8], weight: W(1, 1, 1, 1) },
     { name: "palms rise", pose: () => ({ ...both({ flex: 0.6, abd: 0.25, elbow: 1.0, inward: 0.15 }), pitch: -0.15 }), hold: [2.5, 4.5], turn: [1.3, 1.7], weight: W(1, 1, 1, 1) },
     { name: "one hand up", pose: (r) => ({ ...arm(side(r), { flex: 2.4, abd: 0.25, elbow: 0.3 }), pitch: -0.35 }), hold: [2.5, 4], turn: [1.4, 1.8], weight: W(1, 1, 1, 1) },
+    // Both arms open wide and a little forward, between "wings lift" and "palms rise": the chest lifts and the face tips up to it.
+    { name: "opens wide", pose: () => ({ ...both({ flex: 0.4, abd: 0.7, elbow: 0.3, inward: -0.1 }), pitch: -0.28, shoulderL: 0.12, shoulderR: 0.12, bodyPitch: -0.03 }), hold: [2.5, 4.5], turn: [1.3, 1.7], weight: W(1, 1, 1, 1) },
   ],
 ];
 // Aimed reactions: answers to where the fragments landed, not just which region they speak for. A
