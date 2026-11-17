@@ -588,6 +588,15 @@ const WALK_MOVES: Move[] = [
     turn: [2, 3],
     weight: W(0.8, 0.5, 1.6, 0.5),
   },
+  {
+    name: "steepled fingers, walking",
+    region: 0,
+    // Fingertips meeting before the chest, as in "steepled fingers": head low, the gaze drifting slowly aside as it thinks.
+    pose: (r) => ({ ...both({ flex: 0.85, abd: 0.08, elbow: 1.95, inward: 0.72 }), pitch: 0.16, yaw: side(r) * 0.1, fidget: { keys: ["yaw"], amp: 0.08, freq: 0.3 } }),
+    hold: [8, 16],
+    turn: [2, 3],
+    weight: W(0.8, 0.6, 1.6, 0.5),
+  },
   { name: "hand on heart, walking", region: 1, pose: () => ({ ...arm(1, { flex: 0.75, elbow: 1.95, inward: 0.6 }), pitch: 0.16 }), hold: [6, 14], turn: [2, 3], weight: W(1, 0.4, 1.4, 0.6) },
   { name: "arms open, walking", region: 1, pose: () => ({ ...both({ abd: 0.38, elbow: 0.35, inward: -0.08 }), pitch: -0.1 }), hold: [6, 12], turn: [2.5, 3.5], weight: W(1.2, 0.6, 0.8, 1) },
   {
