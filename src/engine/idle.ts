@@ -368,6 +368,15 @@ const MOVES: Move[] = [
     turn: [2.5, 3.5],
     weight: W(1.4, 0.6, 1.4, 0.6),
   },
+  {
+    name: "heart and belly",
+    region: 2,
+    // Knees soft, one hand over the heart as in "hand over heart", the other low on the belly as in "centred": head lowered, breathing slowly into both.
+    pose: () => ({ ...arm(1, { flex: 0.75, elbow: 1.95, inward: 0.6 }), ...arm(-1, { flex: 0.25, abd: 0.05, elbow: 0.95, inward: 0.72 }), kneeL: 0.15, kneeR: 0.15, pitch: 0.2, roll: -0.04, fidget: { keys: ["shoulderL", "shoulderR"], amp: 0.06, freq: 0.35 } }),
+    hold: [8, 16],
+    turn: [2.5, 3.5],
+    weight: W(1.4, 0.6, 1.5, 0.6),
+  },
   // The spirit: lifted, reaching, beyond.
   {
     name: "halo",
