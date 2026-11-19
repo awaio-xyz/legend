@@ -713,6 +713,19 @@ const AIMED: AimedMove[] = [
     turn: [1.2, 1.6],
     weight: W(1.2, 0.8, 1.2, 0.8),
   },
+  {
+    name: "lifts it to the light",
+    aim: "aura",
+    // The palm finds the landing, then carries it up overhead as in "one hand up", the face lifting after it.
+    pose: (r, land) => (land ? { ...reachTo(handFor(r, land), land.at, land), shoulderL: 0.05, shoulderR: 0.05 } : {}),
+    then: (r, land) => {
+      const s = handFor(r, land);
+      return { ...arm(s, { flex: 2.4, abd: 0.25, elbow: 0.3 }), pitch: -0.35, yaw: s * 0.12, roll: 0 };
+    },
+    hold: [1.5, 2.5],
+    turn: [1.3, 1.7],
+    weight: W(1, 0.6, 1.4, 0.8),
+  },
   { name: "touches where it landed", aim: "body", pose: (r, land) => (land ? reachTo(handFor(r, land), onSkin(land), land) : {}), hold: [2.5, 4.5], turn: [1.3, 1.8], weight: W(1, 1, 1, 1) },
   {
     name: "rests a hand there and bows",
