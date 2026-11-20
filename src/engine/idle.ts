@@ -565,6 +565,18 @@ const AIR_MOVES: Move[] = [
     turn: [3, 4.5],
     weight: W(1.4, 0.5, 2, 0.5),
   },
+  {
+    name: "kneeling, listening",
+    region: 0,
+    // Kneeling on the air as in "kneeling on air", fingertips meeting before the chest as in "steepled fingers": the head tilts aside as in "listening", the gaze drifting slowly.
+    pose: (r) => {
+      const s = side(r);
+      return { ...leg(1, { flex: 0.1, knee: 1.9 }), ...leg(-1, { flex: 0.1, knee: 1.9 }), ...both({ flex: 0.85, abd: 0.08, elbow: 1.95, inward: 0.72 }), roll: s * 0.14, pitch: 0.14, yaw: s * 0.06, point: 0.6, fidget: { keys: ["yaw"], amp: 0.06, freq: 0.3 } };
+    },
+    hold: [8, 18],
+    turn: [3, 4],
+    weight: W(1, 1.2, 1.6, 0.5),
+  },
 ];
 // Regions for the original air moves.
 Object.assign(REGION_OF, { hover: 2, "balance on the air": 2, "legs apart": 2, "arms wide": 3, "arms above": 3, "hands at heart": 1, "floating lotus": 0 });
